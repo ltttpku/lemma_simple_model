@@ -1,6 +1,6 @@
 # lemma_simple_model
 
-> cd CODE 
+> cd .. 
 
 > cp hcrn-videoqa/data/lemma-qa/lemma-qa_vocab.json  lemma_simple_model/data
 
