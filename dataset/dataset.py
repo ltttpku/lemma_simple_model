@@ -68,8 +68,8 @@ class LEMMA(Dataset):
 
     def __getitem__(self, index):
         item = self.tagged_qas[index]
-        question = item['quesiton']
-
+        question = item['question']
+        reasoning_type = item['reasoning_type'].split('$') # # list of string
         question_encode = item['question_encode']
 
         question_encode = torch.from_numpy(np.array(question_encode)).long()
@@ -93,20 +93,22 @@ class LEMMA(Dataset):
 
             frame_rgbs = torch.zeros(self.num_of_sampled_frames, 3, self.img_size[0], self.img_size[1])
         
-        return frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question
+        return frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question, reasoning_type
 
 
 def collate_func(batch):
     frame_rgbs_lst, question_encode_lst, answer_encode_lst, question_char_encode_lst = [], [], [], []
     frame_features_lst = []
     question_lst = []
-    for i, (frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question) in enumerate(batch):
+    reasoning_type_lst = []
+    for i, (frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question, reasoning_type) in enumerate(batch):
         frame_rgbs_lst.append(frame_rgbs)
         question_encode_lst.append(question_encode)
         answer_encode_lst.append(answer_encode)
         frame_features_lst.append(frame_features)
         question_char_encode_lst.append(question_char_encode)
         question_lst.append(question)
+        reasoning_type_lst.append(reasoning_type)
 
     frame_rgbs_lst = torch.stack(frame_rgbs_lst, dim=0)
     question_encode_lst = torch.nn.utils.rnn.pad_sequence(question_encode_lst, batch_first=True, padding_value=0)
@@ -115,13 +117,13 @@ def collate_func(batch):
     question_char_encode_lst = torch.stack(question_char_encode_lst, dim=0)
 
     # # torch.Size([4, 20, 3, 224, 224]) torch.Size([4, 12]) torch.Size([4]) torch.Size([4, 20, 2048]) torch.Size([4, 25, 15])
-    return frame_rgbs_lst, question_encode_lst, answer_encode_lst, frame_features_lst, question_char_encode_lst, question_lst
+    return frame_rgbs_lst, question_encode_lst, answer_encode_lst, frame_features_lst, question_char_encode_lst, question_lst, reasoning_type_lst
 
 
 if __name__ == '__main__':
     dataset = LEMMA('/home/leiting/scratch/lemma_simple_model/data/formatted_test_qas_encode.json', (224, 224), 'train', 20, True)
     dataloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=collate_func)
-    for i, (frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question) in enumerate(dataloader):
+    for i, (frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question, reasonging_type) in enumerate(dataloader):
         print(i, frame_rgbs.shape, question_encode.shape, answer_encode.shape, frame_features.shape, question_char_encode.shape)
         print(len(question))
         break

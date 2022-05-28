@@ -3,8 +3,8 @@ import nltk
 
 assert os.path.exists('data/char_vocab.txt'), 'run generate_char_vocab.py first'
 
-max_word_len = 15 # # train_psac.py word_len: args.char_max_len
-max_sentence_len = 25 # # train_psac.py sentence_len: args.max_len
+max_word_len = 17 # # train_psac.py word_len: args.char_max_len
+max_sentence_len = 30 # # train_psac.py sentence_len: args.max_len
 # mode = 'test'
 mode = sys.argv[1]
 

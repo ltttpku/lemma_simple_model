@@ -12,7 +12,6 @@ def build_resnet(model_name, pretrained=False):
 class VisualBERT(nn.Module):
     def __init__(self, BertTokenizer_CKPT="bert-base-uncased", VisualBertModel_CKPT="uclanlp/visualbert-vqa-coco-pre", output_dim=100) -> None:
         super().__init__()
-
         self.tokenizer = BertTokenizer.from_pretrained(BertTokenizer_CKPT)
         self.model = VisualBertModel.from_pretrained(VisualBertModel_CKPT)
         self.classifier = nn.Linear(768, output_dim)
@@ -25,8 +24,7 @@ class VisualBERT(nn.Module):
         inputs = self.tokenizer(sentences, return_tensors="pt")
         # visual_embeds = torch.rand(1, 20, 2048)
         visual_token_type_ids = torch.ones(visual_embeds.shape[:-1], dtype=torch.long)
-        visual_attention_mask = torch.ones(visual_embeds.shape[:-1], dtype=torch.float)
-        
+        visual_attention_mask = torch.ones(visual_embeds.shape[:-1], dtype=torch.float) 
         inputs.update(
             {
                 "visual_embeds": visual_embeds,
@@ -34,7 +32,6 @@ class VisualBERT(nn.Module):
                 "visual_attention_mask": visual_attention_mask,
             }
         )
-
         outputs = self.model(**inputs)
         last_hidden_states = outputs.last_hidden_state
         logits = self.classifier(last_hidden_states[:, 0, :])
