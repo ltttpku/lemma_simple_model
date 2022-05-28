@@ -60,9 +60,28 @@ $ python preprocess/generate_char_vocab.py
 $ python preprocess/format_mode_qas_encode.py {mode}
 ```
 
+8. tagged_qas.json -->all_reasoning_types.txt
+```bash
+$ python preprocess reasoning_types.py
+```
+
 ### Train
 
 ```bash
 $ python train_xxx.py
 ```
 
+
+### TODO
++ dataset/dataset.py: visual feature preload!
++ QA distribution statistics?
+
+
+|  MODEL | reasoning_type_acc calculator | ALL_ACC |
+|  ----  |         :----:                | :----: |  
+|  cnn_lstm   |       1       |          -          |
+| visual_bert |       0       |          -          |
+|  pure_lstm  |       0       |          -          |
+| hme         |       0       |          -          |
+|  hga        |       0       |          -          |
+| psac        |       0       |          -          |
