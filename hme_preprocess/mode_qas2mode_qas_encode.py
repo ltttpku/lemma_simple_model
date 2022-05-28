@@ -1,4 +1,4 @@
-from base64 import encode
+import nltk
 import json
 
 modes = ['train' ,'test', 'val']
@@ -9,7 +9,7 @@ for mode in modes:
 
     with open('data/lemma-qa_vocab.json', 'r') as lemma_vocab_f:
         input_vocab = json.load(lemma_vocab_f)
-        answer_set_lst = []
+        answer_set_lst = ['<UNK>']
         # # generate answer_set
         for ans in input_vocab['answer_token_to_idx']:
             if ans in ['<UNK>' , '<UNK0>', '<UNK1>', '<NULL>']:
@@ -36,8 +36,10 @@ for mode in modes:
         with open(input_file, 'r') as f:
             qas = json.load(f)
             for qa in qas:
-                question_word_lst = qa['quesiton'][:-1].split(' ') # #去掉标点符号
+                # question_word_lst = qa['question'][:-1].split(' ') # #去掉标点符号
                 encoded_q = []
+                question = qa['question'].lower()[:-1]
+                question_word_lst = nltk.word_tokenize(question)
                 for word in question_word_lst:
                     word = word.lower()
                     if word not in vocab_lst:

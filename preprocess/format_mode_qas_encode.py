@@ -1,4 +1,5 @@
 import json, os, sys
+import nltk
 
 assert os.path.exists('data/char_vocab.txt'), 'run generate_char_vocab.py first'
 
@@ -30,11 +31,16 @@ with open('data/char_vocab.txt', 'r') as charf:
                     answer_encode = int(qa['answer_encode'])
                     qa['answer_encode'] = answer_encode
                 else:
-                    qa['answer_encode'] = answer_set.index(qa['answer'])
-
+                    if qa['answer'] in answer_set:
+                        qa['answer_encode'] = answer_set.index(qa['answer'])
+                    else:
+                        qa['answer_encode'] = answer_set.index('<UNK>')
+                        
                 char_tokens = []
-                sentence = qa['quesiton'].lower().replace(',', '').replace('?', '').replace('\'s', ' \'s')
-                words = sentence.split()
+                # sentence = qa['question'].lower().replace(',', '').replace('?', '').replace('\'s', ' \'s')
+                # words = sentence.split()
+                question = qa['question'].lower()[:-1]
+                words = nltk.word_tokenize(question)
                 for w in words:
                     c_t = []
                     for c in list(w):
