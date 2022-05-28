@@ -10,7 +10,7 @@
 
 --------------------------------------
 mode in ['train', 'test', 'val']
-1. change dir
+0. change dir
 > cd lemma_simple_model
 
 1. tagged_qas.json --> **{mode}_qas.json**, naive train test split
