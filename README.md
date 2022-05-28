@@ -1,5 +1,7 @@
 # lemma_simple_model
 
+### Preprocess
+
 > cd .. 
 
 > cp hcrn-videoqa/data/lemma-qa/lemma-qa_vocab.json  lemma_simple_model/data
@@ -32,6 +34,6 @@ NOTE: CLS and SEP token are initialized as np.zeros((dim_word,))
 > python preprocess/format_mode_qas_encode.py {mode}
 
 
-
-
+### Train
+> python train_xxx.py
 
