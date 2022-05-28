@@ -1,7 +1,9 @@
 # lemma_simple_model
 
 > cd CODE 
+
 > cp hcrn-videoqa/data/lemma-qa/lemma-qa_vocab.json  lemma_simple_model/data
+
 > cp hcrn-videoqa/data/lemma-qa/tagged_qas.json  lemma_simple_model/data
 
 --------------------------------------
