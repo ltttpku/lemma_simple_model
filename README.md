@@ -1,10 +1,10 @@
 # lemma_simple_model
 
->cd CODE 
-   cp hcrn-videoqa/data/lemma-qa/lemma-qa_vocab.json  lemma_simple_model/data
-   cp hcrn-videoqa/data/lemma-qa/tagged_qas.json  lemma_simple_model/data
+> cd CODE 
+> cp hcrn-videoqa/data/lemma-qa/lemma-qa_vocab.json  lemma_simple_model/data
+> cp hcrn-videoqa/data/lemma-qa/tagged_qas.json  lemma_simple_model/data
 
-
+--------------------------------------
 mode in ['train', 'test', 'val']
 1. change dir
 > cd lemma_simple_model
@@ -27,7 +27,7 @@ NOTE: CLS and SEP token are initialized as np.zeros((dim_word,))
 > python preprocess/generate_char_vocab.py
 
 6. {mode}_qas_encode.json --> **formatted_{mode}_qas_encode.json**, 
-''' python preprocess/format_mode_qas_encode.py {mode} '''
+> python preprocess/format_mode_qas_encode.py {mode}
 
 
 
