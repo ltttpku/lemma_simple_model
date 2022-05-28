@@ -10,7 +10,8 @@ import h5py, pickle
 
 
 class LEMMA(Dataset):
-    def __init__(self, tagged_qas_path, img_size=(224, 224), mode='train', num_of_sampled_frames=20, use_preprocessed_features=True) -> None:
+    def __init__(self, tagged_qas_path, img_size=(224, 224), mode='train',
+                 num_of_sampled_frames=20, use_preprocessed_features=True, all_tagged_qas_path='data/tagged_qas.json') -> None:
         super().__init__()
         with open(tagged_qas_path, 'r') as f:
             self.tagged_qas = json.load(f)
@@ -20,6 +21,8 @@ class LEMMA(Dataset):
         self.to_tensor = transforms.ToTensor()
         self.resize = transforms.Resize(img_size)
         self.use_preprocessed_features = use_preprocessed_features
+        self.all_features = []
+        self.preload_visual_features(all_tagged_qas_path=all_tagged_qas_path)
     
 
     def load_frame_paths_from_interval(self, interval):
@@ -56,7 +59,6 @@ class LEMMA(Dataset):
             # list all groups
             # print("Keys: %s" % f.keys())
             a_group_key = list(f.keys())[0]
-
             # Get the data
             data = list(f[a_group_key])
             for i in range(start_idx, end_idx, (end_idx - start_idx) // num_of_sampled_frames):
@@ -86,15 +88,33 @@ class LEMMA(Dataset):
             frame_rgbs = torch.stack(frame_rgbs, dim=0)
 
             frame_features = torch.zeros(3)
-            
         else:
-            frame_features = self.sample_frame_features(self.load_frame_paths_from_interval(item['interval']), self.num_of_sampled_frames)
-            frame_features = torch.from_numpy(np.stack(frame_features, axis=0))
-
+            # frame_features = self.sample_frame_features(self.load_frame_paths_from_interval(item['interval']), self.num_of_sampled_frames)
+            # frame_features = torch.from_numpy(np.stack(frame_features, axis=0))
+            frame_features = self.all_features[item['video_id']]
             frame_rgbs = torch.zeros(self.num_of_sampled_frames, 3, self.img_size[0], self.img_size[1])
         
         return frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question, reasoning_type
-
+    
+    def preload_visual_features(self, all_tagged_qas_path):
+        print('preloading all visual features...')
+        subset_qas = []
+        with open(all_tagged_qas_path, 'r') as ff:
+            all_tagged_qas = json.load(ff)
+            existing_video_ids = []
+            for qa in all_tagged_qas:
+                if qa['video_id'] in existing_video_ids:
+                    continue
+                else:
+                    subset_qas.append(qa)
+                    existing_video_ids.append(qa['video_id'])
+            subset_qas.sort(key=lambda x: x['video_id'])
+        
+        for qa in subset_qas:
+            frame_features = self.sample_frame_features(self.load_frame_paths_from_interval(qa['interval']), self.num_of_sampled_frames)
+            frame_features = torch.from_numpy(np.stack(frame_features, axis=0)) # # num_of_sampled_frames x 2048
+            self.all_features.append(frame_features)
+        
 
 def collate_func(batch):
     frame_rgbs_lst, question_encode_lst, answer_encode_lst, question_char_encode_lst = [], [], [], []

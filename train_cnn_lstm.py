@@ -92,7 +92,8 @@ def train(args):
     with open('data/all_reasoning_types.txt', 'r') as reasonf:
         all_reasoning_types = reasonf.readlines()
         all_reasoning_types = [item.strip() for item in all_reasoning_types]
-    acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+    train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+    test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
 
     global_step = 0
     TIMESTAMP = "{0:%Y-%m-%dT%H-%M-%S/}".format(datetime.now())
@@ -103,6 +104,7 @@ def train(args):
             f.write('%s:%s\n'%(key, value))
             print(key, value)
 
+    log_file = open(os.path.join(log_dir, 'log.txt'), 'w')
     writer = SummaryWriter(log_dir=log_dir)
 
     os.makedirs(os.path.join(args.basedir, 'ckpts'), exist_ok=True)
@@ -110,7 +112,7 @@ def train(args):
 
     for epoch in range(args.nepoch):
         lstm.train()
-        acc_calculator.reset()
+        train_acc_calculator.reset()
         for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(train_dataloader):
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
             frame_rgbs, question_encode, answer_encode = frame_rgbs.to(device), question_encode.to(device), answer_encode.to(device)
@@ -131,7 +133,7 @@ def train(args):
             pred = torch.argmax(logits, dim=1)
             train_acc = sum(pred == answer_encode) / B
 
-            acc_calculator.update(reasoning_type_lst, pred, answer_encode)
+            train_acc_calculator.update(reasoning_type_lst, pred, answer_encode)
             
             writer.add_scalar('train/loss', loss.item(), global_step)
             writer.add_scalar('learning rates', optimizer.param_groups[0]['lr'], global_step)
@@ -143,22 +145,27 @@ def train(args):
                 print(f"global_step:{global_step}, train_loss:{loss.item()}, train_acc:{train_acc}")
 
             if (global_step) % args.i_val == 0:
-                acc_calculator.reset()
-                val_loss, val_acc = validate(cnn, lstm, val_dataloader, epoch, args, acc_calculator=acc_calculator)
+                test_acc_calculator.reset()
+                val_loss, val_acc = validate(cnn, lstm, val_dataloader, epoch, args, acc_calculator=test_acc_calculator)
                 writer.add_scalar('val/loss', val_loss.item(), global_step)
                 writer.add_scalar('val/acc', val_acc, global_step)
-                acc_dct = acc_calculator.get_acc()
+                acc_dct = test_acc_calculator.get_acc()
                 for key, value in acc_dct.items():
                     writer.add_scalar(f'val/reasoning_{key}', value, global_step)
+                log_file.write(f'[VAL]: epoch: {epoch}, global_step: {global_step}\n')
+                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}; all count dct: {test_acc_calculator.all_count_dct}\n')
+
 
             if (global_step) % args.i_test == 0:
-                acc_calculator.reset()
-                test_loss, test_acc = validate(cnn, lstm, test_dataloader, epoch, args, acc_calculator=acc_calculator)
+                test_acc_calculator.reset()
+                test_loss, test_acc = validate(cnn, lstm, test_dataloader, epoch, args, acc_calculator=test_acc_calculator)
                 writer.add_scalar('test/loss', test_loss.item(), global_step)
                 writer.add_scalar('test/acc', test_acc, global_step)
-                acc_dct = acc_calculator.get_acc()
+                acc_dct = test_acc_calculator.get_acc()
                 for key, value in acc_dct.items():
                     writer.add_scalar(f'test/reasoning_{key}', value, global_step)
+                log_file.write(f'[TEST]: epoch: {epoch}, global_step: {global_step}\n')
+                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}; all count dct: {test_acc_calculator.all_count_dct}\n')
 
 
             if (global_step) % args.i_weight == 0:
@@ -171,9 +178,13 @@ def train(args):
                 }, os.path.join(args.basedir, 'ckpts', f"model_{global_step}.tar"))
 
             global_step += 1
-        acc_dct = acc_calculator.get_acc()
+
+        acc_dct = train_acc_calculator.get_acc()
         for key, value in acc_dct.items():
             writer.add_scalar(f'train/reasoning_{key}', value, global_step)
+        log_file.write(f'[TRAIN]: epoch: {epoch}, global_step: {global_step}\n')
+        log_file.write(f'true count dct: {train_acc_calculator.true_count_dct}; all count dct: {train_acc_calculator.all_count_dct}\n')
+        log_file.flush()
 
 
 def test(args):
