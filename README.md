@@ -1,5 +1,23 @@
 # lemma_simple_model
 
+### TODO
++ dataset/dataset.py: visual feature preload! DONE: reduce training time from 6h to 30min :p
++ QA distribution statistics?
+
+
+|  MODEL | add reasoning_type_acc calculator | ALL_ACC |
+|  ----  |         :----:                | :----: |  
+|  cnn_lstm   |       1       |       0.2668          |
+| visual_bert |       0       |          -          |
+|  pure_lstm  |       0       |          -          |
+| hme         |       0       |          -          |
+|  hga        |       0       |          -          |
+| psac        |       0       |          -          |
+
+> tensorboard --logdir cnn_lstm_logs/events
+> 
+> logs: cnn_lstm_logs/events/{TIME}/log.txt
+
 ### Preprocess
 
 ```bash
@@ -72,16 +90,3 @@ $ python train_xxx.py
 ```
 
 
-### TODO
-+ dataset/dataset.py: visual feature preload!
-+ QA distribution statistics?
-
-
-|  MODEL | reasoning_type_acc calculator | ALL_ACC |
-|  ----  |         :----:                | :----: |  
-|  cnn_lstm   |       1       |          -          |
-| visual_bert |       0       |          -          |
-|  pure_lstm  |       0       |          -          |
-| hme         |       0       |          -          |
-|  hga        |       0       |          -          |
-| psac        |       0       |          -          |
