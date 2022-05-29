@@ -11,6 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 import argparse, time
 
+from yaml import parse
+
 from dataset.dataset import LEMMA, collate_func
 # from MY_BERT.model.model import BERT
 import model.visual_bert as visual_bert
@@ -56,6 +58,8 @@ def parse_args():
     parser.add_argument('--test_only', default=False, type=bool)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
 
+    parser.add_argument('--max_len', default=30, type=int)
+
     args = parser.parse_args()
     return args
 
@@ -79,9 +83,10 @@ def train(args):
     cnn.eval() # TODO ?
 
     visualbert = visual_bert.VisualBERT(
-        BertTokenizer_CKPT="bert-base-uncased",
-        VisualBertModel_CKPT="uclanlp/visualbert-vqa-coco-pre",
-        output_dim=args.output_dim,).to(args.device) # # 
+        BertTokenizer_CKPT="/home/leiting/scratch/transformers_pretrained_models/",
+        VisualBertModel_CKPT="/home/leiting/scratch/transformers_pretrained_models/",
+        output_dim=args.output_dim,
+        max_len=args.max_len).to(args.device) # # 
 
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.Adam(visualbert.parameters(), lr=args.lr)
@@ -102,7 +107,7 @@ def train(args):
 
     for epoch in range(args.nepoch):
         visualbert.train()
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question) in enumerate(train_dataloader):
+        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(train_dataloader):
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
             frame_rgbs, question_encode, answer_encode = frame_rgbs.to(device), question_encode.to(device), answer_encode.to(device)
             if args.use_preprocessed_features:
@@ -201,7 +206,7 @@ def validate(cnn, visualbert, val_loader, epoch, args):
     print('validating...')
     with torch.no_grad():
         starttime = time.time()
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question) in enumerate(val_loader):
+        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(val_loader):
             
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
             frame_rgbs, question_encode, answer_encode = frame_rgbs.to(args.device), question_encode.to(args.device), answer_encode.to(args.device)

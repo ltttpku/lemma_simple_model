@@ -16,7 +16,7 @@ import model.pure_lstm as pure_lstm
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--basedir", type=str, default='cnn_lstm_logs', 
+    parser.add_argument("--basedir", type=str, default='pure_lstm_logs', 
                         help='where to store ckpts and logs')
     
     parser.add_argument("--train_data_file_path", type=str, 
@@ -101,7 +101,7 @@ def train(args):
 
     for epoch in range(args.nepoch):
         lstm.train()
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question) in enumerate(train_dataloader):
+        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(train_dataloader):
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
             frame_rgbs, question_encode, answer_encode = frame_rgbs.to(device), question_encode.to(device), answer_encode.to(device)
             if args.use_preprocessed_features:
@@ -197,7 +197,7 @@ def validate(lstm, val_loader, epoch, args):
     # starttime = time.time()
     with torch.no_grad():
         starttime = time.time()
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question) in enumerate(val_loader):
+        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(val_loader):
             
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
             frame_rgbs, question_encode, answer_encode = frame_rgbs.to(args.device), question_encode.to(args.device), answer_encode.to(args.device)

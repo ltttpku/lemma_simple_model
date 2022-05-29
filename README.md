@@ -9,10 +9,10 @@
 |  ----  |         :----:                | :----: |  
 |  cnn_lstm   |       1       |       0.2668          |
 | visual_bert |       0       |          -          |
-|  pure_lstm  |       0       |          -          |
+|  pure_lstm  |       0       |        0.266        |
 | hme         |       0       |          -          |
 |  hga        |       0       |          -          |
-| psac        |       0       |          -          |
+| psac        |       0       |        >0.67       |
 
 > tensorboard --logdir cnn_lstm_logs/events
 > 
@@ -74,11 +74,15 @@ $ python preprocess/generate_char_vocab.py
 
 7. {mode}_qas_encode.json --> **formatted_{mode}_qas_encode.json**, 
 
+need to define max_word_len, max_sentence_len for psac;
+
+need to define max_sentence_len for visual_bert;
+
 ```bash
 $ python preprocess/format_mode_qas_encode.py {mode}
 ```
 
-8. tagged_qas.json -->all_reasoning_types.txt
+1. tagged_qas.json -->all_reasoning_types.txt
 ```bash
 $ python preprocess reasoning_types.py
 ```

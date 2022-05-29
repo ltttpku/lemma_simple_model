@@ -8,7 +8,7 @@ from .model_utils import *
 from torch.nn.utils.weight_norm import weight_norm
 
 Lv = 100
-Lq = 25
+Lq = 30
 Lc = 36
 ctx_dim = 2048
 ctx_dim_m=512

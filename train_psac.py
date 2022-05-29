@@ -150,7 +150,7 @@ def train(args):
     # torch.autograd.set_detect_anomaly(True)
     for epoch in range(args.nepoch):
         my_model.train()
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question) in enumerate(train_dataloader):
+        for i, (frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question, reasoning_type_lst) in enumerate(train_dataloader):
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
             frame_rgbs, question_encode, answer_encode, question_char_encode = frame_rgbs.to(device), question_encode.to(device), answer_encode.to(device), question_char_encode.to(device)
             if args.use_preprocessed_features:
@@ -221,7 +221,7 @@ def validate(cnn, psac, val_loader, epoch, args):
     
     starttime = time.time()
     with torch.no_grad():
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question) in enumerate(val_loader):
+        for i, (frame_rgbs, question_encode, answer_encode, frame_features, question_char_encode, question, reasoning_type_lst) in enumerate(val_loader):
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
             frame_rgbs, question_encode, answer_encode, question_char_encode = frame_rgbs.to(device), question_encode.to(device), answer_encode.to(device), question_char_encode.to(device)
             if args.use_preprocessed_features:

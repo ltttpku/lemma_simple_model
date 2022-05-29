@@ -134,6 +134,7 @@ def train(args):
             train_acc = sum(pred == answer_encode) / B
 
             train_acc_calculator.update(reasoning_type_lst, pred, answer_encode)
+            import pdb; pdb.set_trace()
             
             writer.add_scalar('train/loss', loss.item(), global_step)
             writer.add_scalar('learning rates', optimizer.param_groups[0]['lr'], global_step)
@@ -153,7 +154,7 @@ def train(args):
                 for key, value in acc_dct.items():
                     writer.add_scalar(f'val/reasoning_{key}', value, global_step)
                 log_file.write(f'[VAL]: epoch: {epoch}, global_step: {global_step}\n')
-                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}; all count dct: {test_acc_calculator.all_count_dct}\n')
+                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}\nall count dct: {test_acc_calculator.all_count_dct}\n\n')
 
 
             if (global_step) % args.i_test == 0:
@@ -165,7 +166,7 @@ def train(args):
                 for key, value in acc_dct.items():
                     writer.add_scalar(f'test/reasoning_{key}', value, global_step)
                 log_file.write(f'[TEST]: epoch: {epoch}, global_step: {global_step}\n')
-                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}; all count dct: {test_acc_calculator.all_count_dct}\n')
+                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}\nall count dct: {test_acc_calculator.all_count_dct}\n\n')
 
 
             if (global_step) % args.i_weight == 0:
@@ -183,7 +184,7 @@ def train(args):
         for key, value in acc_dct.items():
             writer.add_scalar(f'train/reasoning_{key}', value, global_step)
         log_file.write(f'[TRAIN]: epoch: {epoch}, global_step: {global_step}\n')
-        log_file.write(f'true count dct: {train_acc_calculator.true_count_dct}; all count dct: {train_acc_calculator.all_count_dct}\n')
+        log_file.write(f'true count dct: {train_acc_calculator.true_count_dct}\nall count dct: {train_acc_calculator.all_count_dct}\n\n')
         log_file.flush()
 
 
