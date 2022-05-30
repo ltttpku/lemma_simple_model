@@ -1,6 +1,6 @@
 # lemma_simple_model
 
-### TODO
+## TODO
 + dataset/dataset.py: visual feature preload! DONE: reduce training time from 6h to 30min :p
 + QA distribution statistics?
 
@@ -8,17 +8,16 @@
 |  MODEL | add reasoning_type_acc calculator | ALL_ACC |
 |  ----  |         :----:                | :----: |  
 |  cnn_lstm   |       1       |       0.2668          |
-| visual_bert |       0       |          -          |
+| visual_bert |       0       |       0.266         |
 |  pure_lstm  |       0       |        0.266        |
+| linguistic_bert |    1     |         0.266        |
 | hme         |       0       |          -          |
 |  hga        |       0       |          -          |
-| psac        |       0       |        >0.67       |
+| psac        |       1       |        >0.67       |
 
-> tensorboard --logdir cnn_lstm_logs/events
-> 
-> logs: cnn_lstm_logs/events/{TIME}/log.txt
 
-### Preprocess
+
+## Preprocess
 
 ```bash
 $ cd .. 
@@ -30,11 +29,11 @@ $ cp hcrn-videoqa/data/lemma-qa/tagged_qas.json  lemma_simple_model/data
 
 --------------------------------------
 mode in ['train', 'test', 'val']
+
 1. change dir
 
 ```bash
 $ cd lemma_simple_model
-$ mkdir data
 ```
 
 2. tagged_qas.json --> **{mode}_qas.json**, naive train test split
@@ -58,9 +57,9 @@ $ python hme_preprocess/generate_feature20.py
 5.  vocab.txt --> **glove.pt**, used for word embedding by all models
 
 
-need to set 'glove_pt_path' in generate_glove_matrix.py
++ need to set 'glove_pt_path' in generate_glove_matrix.py
 
-NOTE: CLS and SEP token are initialized as np.zeros((dim_word,)) 
++ NOTE: CLS and SEP token are initialized as np.zeros((dim_word,)) 
 
 ```bash
 $ python preprocess/generate_glove_matrix.py
@@ -74,23 +73,29 @@ $ python preprocess/generate_char_vocab.py
 
 7. {mode}_qas_encode.json --> **formatted_{mode}_qas_encode.json**, 
 
-need to define max_word_len, max_sentence_len for psac;
++ need to define max_word_len, max_sentence_len for psac;
 
-need to define max_sentence_len for visual_bert;
++ need to define max_sentence_len for visual_bert and linguistic_bert(args.max_len);
+
 
 ```bash
 $ python preprocess/format_mode_qas_encode.py {mode}
 ```
 
-1. tagged_qas.json -->all_reasoning_types.txt
+
+8. tagged_qas.json -->all_reasoning_types.txt
 ```bash
-$ python preprocess reasoning_types.py
+$ python preprocess/reasoning_types.py
 ```
 
-### Train
+## Train
 
 ```bash
 $ python train_xxx.py
 ```
+
+> tensorboard --logdir cnn_lstm_logs/events
+> 
+> logs: cnn_lstm_logs/events/{TIME}/log.txt
 
 
