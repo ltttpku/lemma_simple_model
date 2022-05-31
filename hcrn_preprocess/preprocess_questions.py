@@ -40,7 +40,7 @@ if __name__ == '__main__':
             os.makedirs('data/{}'.format(args.dataset))
         msrvtt_qa.process_questions(args)
     elif args.dataset == 'lemma-qa':
-        args.annotation_file = '/home/leiting/scratch/hcrn-videoqa/data/lemma-qa/{}_qas.json'.format(args.mode)
+        args.annotation_file = 'data/hcrn_data/{}_qas.json'.format(args.mode)
         # check if data folder exists
         if not os.path.exists('data/{}'.format(args.dataset)):
             os.makedirs('data/{}'.format(args.dataset))

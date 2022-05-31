@@ -7,7 +7,7 @@ import glob, os
 # # input: qas.json
 # # output: tagged_qas.json
 
-base_dir = 'data/lemma-qa/'
+base_dir = 'data/hcrn_data/'
 interval_file = open('/scratch/generalvision/LEMMA/vid_intervals.json', 'r')
 interval_lst = json.load(interval_file)
 

@@ -121,13 +121,13 @@ def train(args):
                              num_hid=args.num_hid, word_mat=word_mat, char_mat=char_mat).to(device)
 
     
-    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features)
+    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
     train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_func, pin_memory=True)
     
-    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features)
+    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
     val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
 
-    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features)
+    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
 
     criterion = nn.CrossEntropyLoss().to(device)

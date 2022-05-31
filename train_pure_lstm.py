@@ -61,13 +61,13 @@ def parse_args():
 def train(args):
     device = args.device
 
-    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features)
+    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
     train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_func)
     
-    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features)
+    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
     val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
 
-    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features)
+    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
     
     with open(args.answer_set_path, 'r') as ansf:
@@ -154,37 +154,6 @@ def train(args):
 
 def test(args):
     device = args.device
-
-    # train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features)
-    # train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_func)
-    
-    # val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features)
-    # val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
-
-    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features)
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
-    
-    with open(args.answer_set_path, 'r') as ansf:
-        answers = ansf.readlines()
-        args.output_dim = len(answers) # # output_dim == len(answers)
-
-    # cnn = cnn_lstm.build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
-    # cnn.eval() # TODO ?
-
-    lstm = pure_lstm.pure_lstm(
-        input_size=300, hidden_size=256, num_layers=6, 
-        num_classes=args.output_dim,
-        question_pt_path='data/glove.pt', feature_size=2048,).to(args.device) # # vocab_size = glove_matrix.shape[0]
-
-    criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = optim.Adam(lstm.parameters(), lr=args.lr)
-    
-    global_step = reload(lstm=lstm, optimizer=optimizer, path=args.reload_model_path)
-    lstm.eval()
-
-    test_loss, test_acc = validate(lstm, test_dataloader, epoch=0, args=args)
-
-    print(f"test loss:{test_loss}, test_acc:{test_acc}!")
      
 
 

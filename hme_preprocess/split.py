@@ -1,20 +1,29 @@
+import random
 import json
 
-with open('data/tagged_qas.json', 'r') as f:
-    tagged_qas = json.load(f)
-    train_qas = []
-    test_qas = []
-    val_qas = []
-    for i, qa in  enumerate(tagged_qas):
-        if i % 10 == 1:
-            test_qas.append(qa)
-        elif i % 10 == 2:
-            val_qas.append(qa)
+base_dir = 'data/'
+with open(base_dir + 'tagged_qas.json', 'r') as f:
+    qas = json.load(f)
+    train_qa_lst = []
+    test_qa_lst = []
+    val_qa_lst = []
+
+    type_qa_dct = {}
+    for qa in qas:
+        if qa['reasoning_type'] not in type_qa_dct:
+            type_qa_dct[qa['reasoning_type']] = [qa]
         else:
-            train_qas.append(qa)
-    with open('data/train_qas.json', 'w') as train_f:
-        json.dump(train_qas, train_f)
-    with open('data/test_qas.json', 'w') as test_f:
-        json.dump(test_qas, test_f)
-    with open('data/val_qas.json', 'w') as val_f:
-        json.dump(val_qas, val_f)
+            type_qa_dct[qa['reasoning_type']].append(qa)
+    
+    for key, value in type_qa_dct.items():
+        random.shuffle(value)
+        train_qa_lst += (value[:int(len(value) * (4 / 6))])
+        test_qa_lst += (value[int(len(value) * (4 / 6)):int(len(value) * (5 / 6))])
+        val_qa_lst += (value[int(len(value) * (5 / 6)):])
+    
+    with open(base_dir + 'train_qas.json', 'w') as f:
+        json.dump(train_qa_lst, f, indent=4)
+    with open(base_dir + 'test_qas.json', 'w') as f:
+        json.dump(test_qa_lst, f, indent=4)
+    with open(base_dir + 'val_qas.json', 'w') as f:
+        json.dump(val_qa_lst, f, indent=4)

@@ -68,7 +68,7 @@ def run_batch(cur_batch, model):
     return feats
 
 
-base_dir = '/home/leiting/scratch/HME-VideoQA/msvd-qa/data/lemma_qa/'
+base_dir = 'data/'
 
 def load_video_paths(args):
     with open(base_dir + 'tagged_qas.json') as f:
@@ -237,9 +237,10 @@ def generate_h5(app_model, c3d, video_ids, num_clips, outfile):
 
             if feat_dset is None:
                 C, D = clip_feat.shape
+                C2, D2 = clip_feat2.shape
                 feat_dset = fd.create_dataset('vgg_features', (dataset_size, C, D),
                                                 dtype=np.float32)
-                feat_dset2 = fd.create_dataset('c3d_features', (dataset_size, C, D),
+                feat_dset2 = fd.create_dataset('c3d_features', (dataset_size, C2, D2),
                                                 dtype=np.float32)
                      
                 # video_ids_dset = fd.create_dataset('ids', shape=(dataset_size,), dtype=np.int)
@@ -280,12 +281,19 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    video_paths = load_video_paths(args)
+    # video_paths = load_video_paths(args)
     # random.shuffle(video_paths)
     # load model
     resnetmodel = build_resnet()
     vggmodel = build_vgg()
     c3d = build_C3D()
+
+    interval_file = open('/scratch/generalvision/LEMMA/vid_intervals.json', 'r')
+    interval_lst = json.load(interval_file)
+    video_paths = []
+    for i, interval in enumerate(interval_lst):
+        video_paths.append({'interval': interval, 'video_id':i})
+
 
     generate_h5(vggmodel, c3d, video_paths, args.num_clips,
                 args.output_pt)

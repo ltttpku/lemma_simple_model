@@ -39,6 +39,14 @@ $ python preprocess/preprocess_features.py --gpu_id 0 --dataset lemma-qa --model
 $ python preprocess/preprocess_features.py --dataset lemma-qa --model resnext101 --image_height 112 --image_width 112
 ```
 
+3. preprocess vocab: --> data/hcrn_data/lemma-qa_vocab.json
+
+
+```bash
+$ python hcrn_preprocess/preprocess_vocab.py
+```
+
+
 ------------------------------------------
 
 
@@ -66,7 +74,7 @@ $ python hme_preprocess/split.py
 $ python hme_preprocess/mode_qas2mode_qas_encode.py
 ```
 
-4. LEMMA videos --> **video_feature_20.h5** ( default: vgg+c3d), used by HME and HGA
+4. LEMMA videos --> **video_feature_20.h5** (ONLY need to run once, default: vgg+c3d), used by HME and HGA
 
 ```bash
 $ python hme_preprocess/generate_feature20.py
@@ -77,7 +85,6 @@ $ python hme_preprocess/generate_feature20.py
 
 + need to set 'glove_pt_path' in generate_glove_matrix.py
 
-+ NOTE: CLS and SEP token are initialized as np.zeros((dim_word,)) 
 
 ```bash
 $ python preprocess/generate_glove_matrix.py

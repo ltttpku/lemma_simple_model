@@ -220,7 +220,7 @@ if __name__ == '__main__':
     # output
     parser.add_argument('--out', dest='outfile',
                         help='output filepath',
-                        default="data/{}/{}_{}_feat.h5", type=str)
+                        default="data/hcrn_data/{}_{}_feat.h5", type=str)
     # image sizes
     parser.add_argument('--num_clips', default=8, type=int)
     parser.add_argument('--image_height', default=224, type=int)
@@ -285,5 +285,5 @@ if __name__ == '__main__':
         elif args.model == 'resnext101':
             model = build_resnext()
         generate_h5(model, video_paths, args.num_clips,
-                    args.outfile.format(args.dataset, args.dataset, args.feature_type), lemma_qa=True)
+                    args.outfile.format(args.dataset, args.feature_type), lemma_qa=True)
         
