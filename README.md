@@ -5,38 +5,56 @@
 + QA distribution statistics?
 
 
-|  MODEL | add reasoning_type_acc calculator | ALL_ACC |
-|  ----  |         :----:                | :----: |  
-|  cnn_lstm   |       1       |       0.2668          |
-| visual_bert |       0       |       0.266         |
-|  pure_lstm  |       0       |        0.266        |
-| linguistic_bert |    1     |         0.266        |
-| hme         |       0       |          -          |
-|  hga        |       0       |          -          |
-| psac        |       1       |        >0.67       |
-
+|        MODEL         | add reasoning_type_acc calculator | ALL_ACC |
+|        ----           |         :----:                 | :----: |  
+|  cnn_lstm                        |       1      |       >0.37       |
+| visual_bert(from_pretrained)     |       1      |       0.757       |
+|  pure_lstm                       |       0      |       0.37        |
+| linguistic_bert(from_pretrained) |       1      |       0.68    |
+|  hme                             |       0      |        -        |
+|  hga                             |       0      |        -        |
+|  psac                            |       1      |        -        |
+| hcrn                             |     1       |       >0.58      |
+| hcrn(w/o visual)                 |     1        |      >0.50     |
 
 
 ## Preprocess
 
+### HCRN-Preprocess
++  原始qas.json放到 data/hcrn_data/ 下
+
+1. assign each qa an id: data/hcrn_data/qas.json --> data/hcrn_data/**tagged_qas.json**
+
 ```bash
-$ cd .. 
+$ python hcrn_preprocess/qas2tagged_qas.py  # tagged_qa中，video_id 和 <video_name, interval>一一对一, 
+# tag qas using /scratch/generalvision/LEMMA/vid_intervals.json
+```
 
-$ cp hcrn-videoqa/data/lemma-qa/lemma-qa_vocab.json  lemma_simple_model/data
 
-$ cp hcrn-videoqa/data/lemma-qa/tagged_qas.json  lemma_simple_model/data
+2. preprocess visual features (only need to run ONCE even if there's a new set of qas) :  --> data/hcrn_data/lemma-qa_{}_feat.h5
+
+```bash
+$ python preprocess/preprocess_features.py --gpu_id 0 --dataset lemma-qa --model resnet101
+
+$ python preprocess/preprocess_features.py --dataset lemma-qa --model resnext101 --image_height 112 --image_width 112
+```
+
+------------------------------------------
+
+
+### Other Preprocess
+```bash
+
+$ cp data/hcrn_data/lemma-qa_vocab.json  data/
+
+$ cp data/hcrn_data/tagged_qas.json  data/
 ```
 
 --------------------------------------
 mode in ['train', 'test', 'val']
 
-1. change dir
 
-```bash
-$ cd lemma_simple_model
-```
-
-2. tagged_qas.json --> **{mode}_qas.json**, naive train test split
+1. tagged_qas.json --> **{mode}_qas.json**, naive train test split
 
 ```bash
 $ python hme_preprocess/split.py 

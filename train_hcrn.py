@@ -1,5 +1,11 @@
-from pyexpat import model
-from statistics import mode
+import json
+import os, sys
+
+import torch
+import torch.optim as optim
+import torch.nn as nn
+import numpy as np
+
 import torch
 import numpy as np
 import torch.nn as nn
@@ -9,15 +15,19 @@ import sys, os
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-import argparse, time
+import argparse, time, pickle
 
-from dataset.dataset import LEMMA, collate_func
-import model.cnn_lstm as cnn_lstm
+from yaml import parse
+
+# from dataset.dataset import LEMMA, collate_func
+from dataset.hcrn_dataset import LEMMA, collate_func
 from utils.utils import ReasongingTypeAccCalculator
+import model.HCRN.model.HCRN as HCRN
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--basedir", type=str, default='cnn_lstm_logs', 
+    parser.add_argument("--basedir", type=str, default='hcrn_logs', 
                         help='where to store ckpts and logs')
     
     parser.add_argument("--train_data_file_path", type=str, 
@@ -37,7 +47,7 @@ def parse_args():
     parser.add_argument("--lr", type=float, default=1e-3,  
                         help='')
     
-    parser.add_argument("--i_val",   type=int, default=800, 
+    parser.add_argument("--i_val",   type=int, default=2000, 
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_test",   type=int, default=4000, 
                         help='frequency of console printout and metric loggin')
@@ -45,18 +55,14 @@ def parse_args():
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_weight", type=int, default=50000, 
                         help='frequency of weight ckpt saving')
-    parser.add_argument('--i_reasoning_type_acc', type=int, default=200,
-                        help='frequency of log reasoning_type acc')
 
-    parser.add_argument('--img_size', default=(224, 224))
-    parser.add_argument('--num_frames_per_video', type=int, default=20)
-    parser.add_argument('--cnn_modelname', type=str, default='resnet101')
-    parser.add_argument('--cnn_pretrained', type=bool, default=True)
     parser.add_argument('--output_dim', type=int, default=1)
-    parser.add_argument('--use_preprocessed_features', type=int, default=1)
 
     parser.add_argument('--test_only', default=False, type=bool)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
+
+    parser.add_argument('--question_pt_path', type=str, default='data/glove.pt')
+    parser.add_argument('--without_visual', type=int, default=0)
 
     args = parser.parse_args()
     return args
@@ -64,29 +70,62 @@ def parse_args():
 def train(args):
     device = args.device
 
-    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features)
-    train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_func)
-    
-    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features)
-    val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
+    # dataset = LEMMA('/home/leiting/scratch/lemma_simple_model/data/formatted_test_qas_encode.json', 
+    #                 mode='train',
+    #                 app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
+    #                 motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
 
-    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features)
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
+    train_dataset = LEMMA(args.train_data_file_path, 'train', 
+                    app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
+                    motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
+    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, collate_fn=collate_func)
+    
+    val_dataset = LEMMA(args.train_data_file_path, 'train', 
+                    app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
+                    motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
+    val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
+
+    test_dataset = LEMMA(args.train_data_file_path, 'train', 
+                    app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
+                    motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
+    test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
     
     with open(args.answer_set_path, 'r') as ansf:
         answers = ansf.readlines()
         args.output_dim = len(answers) # # output_dim == len(answers)
 
-    cnn = cnn_lstm.build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
-    cnn.eval() # TODO ?
+    args.vision_dim = 2048
+    args.module_dim = 512
+    args.word_dim = 300
+    args.k_max_frame_level = 16
+    args.k_max_clip_level = 8
+    args.spl_resolution = 1
+    vocab_dct = json.load(open('data/hcrn_data/lemma-qa_vocab.json', 'r'))
+    args.question_type = 'none'
 
-    lstm = cnn_lstm.lstm(
-        input_size=300, hidden_size=256, num_layers=6, 
-        num_classes=args.output_dim,
-        question_pt_path='data/glove.pt', feature_size=2048,).to(args.device) # # vocab_size = glove_matrix.shape[0]
+    model_kwargs = {
+            'vision_dim': args.vision_dim,
+            'module_dim': args.module_dim,
+            'word_dim': args.word_dim,
+            'k_max_frame_level': args.k_max_frame_level,
+            'k_max_clip_level': args.k_max_clip_level,
+            'spl_resolution': args.spl_resolution,
+            'vocab': vocab_dct, # # shape should be the same as glove_matrix
+            'question_type': args.question_type
+    }
 
+    # glove_matrix = torch.rand(201, 300).to(device)
+    with open(args.question_pt_path, 'rb') as f:
+        obj = pickle.load(f)
+        glove_matrix = obj['glove']
+    glove_matrix = torch.FloatTensor(glove_matrix).to(device)
+
+    model = HCRN.HCRNNetwork(**model_kwargs).to(device)
+    with torch.no_grad():
+        model.linguistic_input_unit.encoder_embed.weight.set_(glove_matrix)
+    
     criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = optim.Adam(lstm.parameters(), lr=args.lr)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     with open('data/all_reasoning_types.txt', 'r') as reasonf:
         all_reasoning_types = reasonf.readlines()
@@ -110,23 +149,31 @@ def train(args):
     pbar = tqdm(total=args.nepoch * len(train_dataloader))
 
     for epoch in range(args.nepoch):
-        lstm.train()
+        model.train()
         train_acc_calculator.reset()
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(train_dataloader):
-            B, num_frame_per_video, C, H, W = frame_rgbs.shape
-            frame_rgbs, question_encode, answer_encode = frame_rgbs.to(device), question_encode.to(device), answer_encode.to(device)
-            if args.use_preprocessed_features:
-                frame_features = frame_features.to(device)
-            else:
-                frame_features = cnn(frame_rgbs.reshape(-1, C, H, W))
-                frame_features = frame_features.reshape(B, num_frame_per_video, -1)
-            
-            logits = lstm(question_encode, frame_features)
+        for i, (answer_encode, app_feat, motion_feat, question_encode, question_len_lst, reasoning_type_lst) in enumerate(train_dataloader):
+            B = answer_encode.shape[0]
+            question_len = torch.from_numpy(np.array(question_len_lst))
+            answer_encode, app_feat, motion_feat, question_encode, question_len = answer_encode.to(device), app_feat.to(device), motion_feat.to(device), question_encode.to(device), question_len.to(device)
+
+            ans_candidates = torch.rand(B, 5).to(device)
+            ans_candidates_len = torch.rand(B, 5).to(device)
+            # app_feat = torch.rand(B, 8, 16, 2048).to(device)
+            # motion_feat = torch.rand(B, 8, 2048).to(device)
+            # question = torch.ones(B, 44).long().to(device)
+            # question_len = torch.ones(B).long().to(device)
+            if args.without_visual:
+                app_feat = torch.randn(B, 8, 16, 2048).to(device)
+                motion_feat = torch.randn(B, 8, 2048).to(device)
+
+            logits = model(ans_candidates, ans_candidates_len,
+                    app_feat, motion_feat, question_encode, question_len)
 
             loss = criterion(logits, answer_encode.long())
 
             optimizer.zero_grad()
             loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=12)
             optimizer.step()
 
             pred = torch.argmax(logits, dim=1)
@@ -139,13 +186,14 @@ def train(args):
             writer.add_scalar('train/acc', train_acc, global_step)
 
             pbar.update(1)
-
+            global_step += 1
+        
             if global_step % args.i_print  == 0:
                 print(f"global_step:{global_step}, train_loss:{loss.item()}, train_acc:{train_acc}")
 
             if (global_step) % args.i_val == 0:
                 test_acc_calculator.reset()
-                val_loss, val_acc = validate(cnn, lstm, val_dataloader, epoch, args, acc_calculator=test_acc_calculator)
+                val_loss, val_acc = validate(model, val_dataloader, epoch, args, acc_calculator=test_acc_calculator)
                 writer.add_scalar('val/loss', val_loss.item(), global_step)
                 writer.add_scalar('val/acc', val_acc, global_step)
                 acc_dct = test_acc_calculator.get_acc()
@@ -157,7 +205,7 @@ def train(args):
 
             if (global_step) % args.i_test == 0:
                 test_acc_calculator.reset()
-                test_loss, test_acc = validate(cnn, lstm, test_dataloader, epoch, args, acc_calculator=test_acc_calculator)
+                test_loss, test_acc = validate( model, test_dataloader, epoch, args, acc_calculator=test_acc_calculator)
                 writer.add_scalar('test/loss', test_loss.item(), global_step)
                 writer.add_scalar('test/acc', test_acc, global_step)
                 acc_dct = test_acc_calculator.get_acc()
@@ -169,14 +217,13 @@ def train(args):
 
             if (global_step) % args.i_weight == 0:
                 torch.save({
-                    'cnn_state_dict': cnn.state_dict(),
-                    'lstm_state_dict': lstm.state_dict(),
+                    'hcrn_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': loss,
                     'global_step': global_step,
                 }, os.path.join(args.basedir, 'ckpts', f"model_{global_step}.tar"))
 
-            global_step += 1
+            
 
         acc_dct = train_acc_calculator.get_acc()
         for key, value in acc_dct.items():
@@ -189,63 +236,35 @@ def train(args):
 def test(args):
     pass
 
-    device = args.device
-    # train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features)
-    # train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_func)
-    
-    # val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features)
-    # val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
 
-    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features)
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
-    
-    with open(args.answer_set_path, 'r') as ansf:
-        answers = ansf.readlines()
-        args.output_dim = len(answers) # # output_dim == len(answers)
-
-    cnn = cnn_lstm.build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
-    cnn.eval() # TODO ?
-
-    lstm = cnn_lstm.lstm(
-        input_size=300, hidden_size=256, num_layers=6, 
-        num_classes=args.output_dim,
-        question_pt_path='data/glove.pt', feature_size=2048,).to(args.device) # # vocab_size = glove_matrix.shape[0]
-
-    criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = optim.Adam(lstm.parameters(), lr=args.lr)
-    
-    global_step = reload(cnn=cnn, lstm=lstm, optimizer=optimizer, path=args.reload_model_path)
-    lstm.eval()
-
-    test_loss, test_acc = validate(cnn, lstm, test_dataloader, epoch=0, args=args)
-
-    print(f"test loss:{test_loss}, test_acc:{test_acc}!")
-     
-
-
-def validate(cnn, lstm, val_loader, epoch, args, acc_calculator):
-    lstm.eval()
+def validate( model, val_loader, epoch, args, acc_calculator):
+    model.eval()
     all_acc = 0
     all_loss = 0
     batch_size = args.batch_size
     acc_calculator.reset()
-    print('validating...')
+
     starttime = time.time()
     with torch.no_grad():
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(val_loader):
-            B, num_frame_per_video, C, H, W = frame_rgbs.shape
-            frame_rgbs, question_encode, answer_encode = frame_rgbs.to(args.device), question_encode.to(args.device), answer_encode.to(args.device)
-            if args.use_preprocessed_features:
-                frame_features = frame_features.to(device)
-            else:
-                frame_features = cnn(frame_rgbs.reshape(-1, C, H, W))
-                frame_features = frame_features.reshape(B, num_frame_per_video, -1)
-            
-            logits = lstm(question_encode, frame_features)
+        for i, (answer_encode, app_feat, motion_feat, question_encode, question_len_lst, reasoning_type_lst) in enumerate(tqdm(val_loader)):
+            B = answer_encode.shape[0]
+            question_len = torch.from_numpy(np.array(question_len_lst))
+            answer_encode, app_feat, motion_feat, question_encode, question_len = answer_encode.to(device), app_feat.to(device), motion_feat.to(device), question_encode.to(device), question_len.to(device)
+
+            ans_candidates = torch.rand(B, 5).to(device)
+            ans_candidates_len = torch.rand(B, 5).to(device)
+            # app_feat = torch.rand(B, 8, 16, 2048).to(device)
+            # motion_feat = torch.rand(B, 8, 2048).to(device)
+            # question = torch.ones(B, 44).long().to(device)
+            # question_len = torch.ones(B).long().to(device)
+            if args.without_visual:
+                app_feat = torch.randn(B, 8, 16, 2048).to(device)
+                motion_feat = torch.randn(B, 8, 2048).to(device)
+
+            logits = model(ans_candidates, ans_candidates_len,
+                    app_feat, motion_feat, question_encode, question_len)
 
             all_loss += nn.CrossEntropyLoss().to(device)(logits, answer_encode.long())
-            # print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
-            # starttime = time.time()
 
             pred = torch.argmax(logits, dim=1)
             test_acc = sum(pred == answer_encode) / B
@@ -253,21 +272,20 @@ def validate(cnn, lstm, val_loader, epoch, args, acc_calculator):
 
             acc_calculator.update(reasoning_type_lst, pred, answer_encode)
 
-    print('validate cost', time.time() - starttime, 's')
+    print('validating cost', time.time() - starttime, 's')
     all_loss /= len(val_loader)
     all_acc /= len(val_loader)
-    lstm.train()
+    model.train()
     return all_loss, all_acc
 
 
-def reload(cnn, lstm, optimizer, path):
+def reload( model, optimizer, path):
     checkpoint = torch.load(path)
-    cnn.load_state_dict(checkpoint['cnn_state_dict'])
-    lstm.load_state_dict(checkpoint['lstm_state_dict'])
+    model.load_state_dict(checkpoint['linguistic_bert_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     global_step = checkpoint['global_step']
-    cnn.eval()
-    lstm.eval()
+    model.eval()
+
 
 if __name__ =='__main__':
     args = parse_args()
@@ -275,6 +293,11 @@ if __name__ =='__main__':
     device_id = 0
     device = torch.device(f"cuda:{device_id}" if torch.cuda.is_available() else "cpu")
     args.device = device
+    # set random seed
+    torch.manual_seed(666)
+    np.random.seed(666)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(666)
 
     if args.test_only:
         print('test only!')

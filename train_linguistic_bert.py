@@ -12,12 +12,13 @@ from datetime import datetime
 import argparse, time
 
 from dataset.dataset import LEMMA, collate_func
-import model.cnn_lstm as cnn_lstm
+# from MY_BERT.model.model import BERT
+import model.linguistic_bert as linguistic_bert
 from utils.utils import ReasongingTypeAccCalculator
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--basedir", type=str, default='cnn_lstm_logs', 
+    parser.add_argument("--basedir", type=str, default='linguistic_bert_logs', 
                         help='where to store ckpts and logs')
     
     parser.add_argument("--train_data_file_path", type=str, 
@@ -45,8 +46,6 @@ def parse_args():
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_weight", type=int, default=50000, 
                         help='frequency of weight ckpt saving')
-    parser.add_argument('--i_reasoning_type_acc', type=int, default=200,
-                        help='frequency of log reasoning_type acc')
 
     parser.add_argument('--img_size', default=(224, 224))
     parser.add_argument('--num_frames_per_video', type=int, default=20)
@@ -57,6 +56,8 @@ def parse_args():
 
     parser.add_argument('--test_only', default=False, type=bool)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
+
+    parser.add_argument('--max_len', default=50, type=int)
 
     args = parser.parse_args()
     return args
@@ -77,16 +78,16 @@ def train(args):
         answers = ansf.readlines()
         args.output_dim = len(answers) # # output_dim == len(answers)
 
-    cnn = cnn_lstm.build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
+    cnn = linguistic_bert.build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
     cnn.eval() # TODO ?
 
-    lstm = cnn_lstm.lstm(
-        input_size=300, hidden_size=256, num_layers=6, 
-        num_classes=args.output_dim,
-        question_pt_path='data/glove.pt', feature_size=2048,).to(args.device) # # vocab_size = glove_matrix.shape[0]
+    model = linguistic_bert.LinguisticBERT(BertTokenizer_CKPT="/home/leiting/scratch/transformers_pretrained_models/",
+                    BertModel_CKPT="/home/leiting/scratch/transformers_pretrained_models/",
+                    output_dim=args.output_dim,
+                    max_len=args.max_len).to(device)
 
     criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = optim.Adam(lstm.parameters(), lr=args.lr)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     with open('data/all_reasoning_types.txt', 'r') as reasonf:
         all_reasoning_types = reasonf.readlines()
@@ -110,7 +111,7 @@ def train(args):
     pbar = tqdm(total=args.nepoch * len(train_dataloader))
 
     for epoch in range(args.nepoch):
-        lstm.train()
+        model.train()
         train_acc_calculator.reset()
         for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(train_dataloader):
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
@@ -120,8 +121,7 @@ def train(args):
             else:
                 frame_features = cnn(frame_rgbs.reshape(-1, C, H, W))
                 frame_features = frame_features.reshape(B, num_frame_per_video, -1)
-            
-            logits = lstm(question_encode, frame_features)
+            logits = model(question, )
 
             loss = criterion(logits, answer_encode.long())
 
@@ -145,7 +145,7 @@ def train(args):
 
             if (global_step) % args.i_val == 0:
                 test_acc_calculator.reset()
-                val_loss, val_acc = validate(cnn, lstm, val_dataloader, epoch, args, acc_calculator=test_acc_calculator)
+                val_loss, val_acc = validate(cnn, model, val_dataloader, epoch, args, acc_calculator=test_acc_calculator)
                 writer.add_scalar('val/loss', val_loss.item(), global_step)
                 writer.add_scalar('val/acc', val_acc, global_step)
                 acc_dct = test_acc_calculator.get_acc()
@@ -157,7 +157,7 @@ def train(args):
 
             if (global_step) % args.i_test == 0:
                 test_acc_calculator.reset()
-                test_loss, test_acc = validate(cnn, lstm, test_dataloader, epoch, args, acc_calculator=test_acc_calculator)
+                test_loss, test_acc = validate(cnn, model, test_dataloader, epoch, args, acc_calculator=test_acc_calculator)
                 writer.add_scalar('test/loss', test_loss.item(), global_step)
                 writer.add_scalar('test/acc', test_acc, global_step)
                 acc_dct = test_acc_calculator.get_acc()
@@ -170,7 +170,7 @@ def train(args):
             if (global_step) % args.i_weight == 0:
                 torch.save({
                     'cnn_state_dict': cnn.state_dict(),
-                    'lstm_state_dict': lstm.state_dict(),
+                    'linguistic_bert_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': loss,
                     'global_step': global_step,
@@ -203,10 +203,10 @@ def test(args):
         answers = ansf.readlines()
         args.output_dim = len(answers) # # output_dim == len(answers)
 
-    cnn = cnn_lstm.build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
+    cnn = linguistic_bert.build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
     cnn.eval() # TODO ?
 
-    lstm = cnn_lstm.lstm(
+    lstm = linguistic_bert.lstm(
         input_size=300, hidden_size=256, num_layers=6, 
         num_classes=args.output_dim,
         question_pt_path='data/glove.pt', feature_size=2048,).to(args.device) # # vocab_size = glove_matrix.shape[0]
@@ -223,8 +223,8 @@ def test(args):
      
 
 
-def validate(cnn, lstm, val_loader, epoch, args, acc_calculator):
-    lstm.eval()
+def validate(cnn, model, val_loader, epoch, args, acc_calculator):
+    model.eval()
     all_acc = 0
     all_loss = 0
     batch_size = args.batch_size
@@ -232,7 +232,7 @@ def validate(cnn, lstm, val_loader, epoch, args, acc_calculator):
     print('validating...')
     starttime = time.time()
     with torch.no_grad():
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(val_loader):
+        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(tqdm(val_loader)):
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
             frame_rgbs, question_encode, answer_encode = frame_rgbs.to(args.device), question_encode.to(args.device), answer_encode.to(args.device)
             if args.use_preprocessed_features:
@@ -241,11 +241,9 @@ def validate(cnn, lstm, val_loader, epoch, args, acc_calculator):
                 frame_features = cnn(frame_rgbs.reshape(-1, C, H, W))
                 frame_features = frame_features.reshape(B, num_frame_per_video, -1)
             
-            logits = lstm(question_encode, frame_features)
+            logits = model(question)
 
             all_loss += nn.CrossEntropyLoss().to(device)(logits, answer_encode.long())
-            # print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
-            # starttime = time.time()
 
             pred = torch.argmax(logits, dim=1)
             test_acc = sum(pred == answer_encode) / B
@@ -253,21 +251,22 @@ def validate(cnn, lstm, val_loader, epoch, args, acc_calculator):
 
             acc_calculator.update(reasoning_type_lst, pred, answer_encode)
 
-    print('validate cost', time.time() - starttime, 's')
+    print('validating cost', time.time() - starttime, 's')
     all_loss /= len(val_loader)
     all_acc /= len(val_loader)
-    lstm.train()
+    model.train()
     return all_loss, all_acc
 
 
-def reload(cnn, lstm, optimizer, path):
+def reload(cnn, model, optimizer, path):
     checkpoint = torch.load(path)
     cnn.load_state_dict(checkpoint['cnn_state_dict'])
-    lstm.load_state_dict(checkpoint['lstm_state_dict'])
+    model.load_state_dict(checkpoint['linguistic_bert_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     global_step = checkpoint['global_step']
     cnn.eval()
-    lstm.eval()
+    model.eval()
+
 
 if __name__ =='__main__':
     args = parse_args()

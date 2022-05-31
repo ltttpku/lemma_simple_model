@@ -22,10 +22,8 @@ for mode in modes:
                 answerset_f.write('\n')
         
         # # generate vocab_set
-        vocab_lst = ['<UNK>' ,'<CLS>', '<SEP>']
+        vocab_lst = []
         for word in input_vocab['question_token_to_idx']:
-            if word in ['<UNK>' , '<UNK0>', '<UNK1>', '<NULL>']:
-                continue
             if word not in vocab_lst:
                 vocab_lst.append(word)
         with open('data/vocab.txt', 'w') as vocab_f:
