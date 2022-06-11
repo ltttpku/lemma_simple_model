@@ -3,11 +3,11 @@
 ## NEW SPLIT PREPROCESS
 + put train_qas.json, test_qas.json, val_qas.json, tagged_qa.json to data/
 
-+ python hcrn_preprocess/preprocess_vocab.py
++ python preprocess/preprocess_vocab.py
   + train_qas.json --> lemma-qa_vocab.json
   + may need to add "has", "that" to lemma-qa_vocab.json
 
-+ python hme_preprocess/mode_qas2mode_qas_encode.py
++ python preprocess/mode_qas2mode_qas_encode.py
   + {mode}_qas.json， lemma-qa_vocab.json --> {mode}_qas_encode.json, answer_set.txt, vocab.txt
   
 + python preprocess/generate_glove_matrix.py
