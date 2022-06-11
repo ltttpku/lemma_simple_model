@@ -34,5 +34,8 @@ class ReasongingTypeAccCalculator():
     
     def get_acc(self):
         for reasoning_type in self.reasoning_types:
-            self.acc_dct[reasoning_type] = self.true_count_dct[reasoning_type] / self.all_count_dct[reasoning_type]
+            if self.all_count_dct[reasoning_type] == 0:
+                self.acc_dct[reasoning_type] = 0
+            else:
+                self.acc_dct[reasoning_type] = self.true_count_dct[reasoning_type] / self.all_count_dct[reasoning_type]
         return self.acc_dct

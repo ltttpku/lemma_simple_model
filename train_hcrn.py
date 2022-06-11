@@ -41,19 +41,19 @@ def parse_args():
                         )
     parser.add_argument('--answer_set_path', type=str, default='data/answer_set.txt')
 
-    parser.add_argument("--batch_size", type=int, default=64, )
-    parser.add_argument("--nepoch", type=int, default=5,  
+    parser.add_argument("--batch_size", type=int, default=32, )
+    parser.add_argument("--nepoch", type=int, default=60,  
                         help='num of total epoches')
-    parser.add_argument("--lr", type=float, default=1e-3,  
+    parser.add_argument("--lr", type=float, default=1e-4,  
                         help='')
     
-    parser.add_argument("--i_val",   type=int, default=2000, 
+    parser.add_argument("--i_val",   type=int, default=20000, 
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_test",   type=int, default=4000, 
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_print",   type=int, default=60, 
                         help='frequency of console printout and metric loggin')
-    parser.add_argument("--i_weight", type=int, default=50000, 
+    parser.add_argument("--i_weight", type=int, default=4000, 
                         help='frequency of weight ckpt saving')
 
     parser.add_argument('--output_dim', type=int, default=1)
@@ -78,14 +78,14 @@ def train(args):
     train_dataset = LEMMA(args.train_data_file_path, 'train', 
                     app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
                     motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
-    train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True, collate_fn=collate_func)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_func)
     
-    val_dataset = LEMMA(args.train_data_file_path, 'train', 
+    val_dataset = LEMMA(args.val_data_file_path, 'val', 
                     app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
                     motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
     val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
 
-    test_dataset = LEMMA(args.train_data_file_path, 'train', 
+    test_dataset = LEMMA(args.test_data_file_path, 'test', 
                     app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
                     motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
     test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
@@ -104,14 +104,14 @@ def train(args):
     args.question_type = 'none'
 
     model_kwargs = {
-            'vision_dim': args.vision_dim,
-            'module_dim': args.module_dim,
-            'word_dim': args.word_dim,
-            'k_max_frame_level': args.k_max_frame_level,
-            'k_max_clip_level': args.k_max_clip_level,
-            'spl_resolution': args.spl_resolution,
+            'vision_dim': args.vision_dim, ## 2048
+            'module_dim': args.module_dim, ## 512
+            'word_dim': args.word_dim, ## 300
+            'k_max_frame_level': args.k_max_frame_level, ## 16
+            'k_max_clip_level': args.k_max_clip_level, ## 8
+            'spl_resolution': args.spl_resolution, ## 1
             'vocab': vocab_dct, # # shape should be the same as glove_matrix
-            'question_type': args.question_type
+            'question_type': args.question_type ## 'none'
     }
 
     # glove_matrix = torch.rand(201, 300).to(device)
@@ -127,13 +127,18 @@ def train(args):
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(model=model, optimizer=optimizer, path=args.reload_model_path)
+    
     with open('data/all_reasoning_types.txt', 'r') as reasonf:
         all_reasoning_types = reasonf.readlines()
         all_reasoning_types = [item.strip() for item in all_reasoning_types]
     train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
     test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
 
-    global_step = 0
+    global_step = reload_step
     TIMESTAMP = "{0:%Y-%m-%dT%H-%M-%S/}".format(datetime.now())
     log_dir = os.path.join(args.basedir, 'events', TIMESTAMP)
     os.makedirs(log_dir)
@@ -147,7 +152,6 @@ def train(args):
 
     os.makedirs(os.path.join(args.basedir, 'ckpts'), exist_ok=True)
     pbar = tqdm(total=args.nepoch * len(train_dataloader))
-
     for epoch in range(args.nepoch):
         model.train()
         train_acc_calculator.reset()
@@ -215,15 +219,13 @@ def train(args):
                 log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}\nall count dct: {test_acc_calculator.all_count_dct}\n\n')
 
 
-            if (global_step) % args.i_weight == 0:
+            if (global_step) % args.i_weight == 0 and global_step >= 20000:
                 torch.save({
                     'hcrn_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': loss,
                     'global_step': global_step,
                 }, os.path.join(args.basedir, 'ckpts', f"model_{global_step}.tar"))
-
-            
 
         acc_dct = train_acc_calculator.get_acc()
         for key, value in acc_dct.items():
@@ -253,10 +255,7 @@ def validate( model, val_loader, epoch, args, acc_calculator):
 
             ans_candidates = torch.rand(B, 5).to(device)
             ans_candidates_len = torch.rand(B, 5).to(device)
-            # app_feat = torch.rand(B, 8, 16, 2048).to(device)
-            # motion_feat = torch.rand(B, 8, 2048).to(device)
-            # question = torch.ones(B, 44).long().to(device)
-            # question_len = torch.ones(B).long().to(device)
+
             if args.without_visual:
                 app_feat = torch.randn(B, 8, 16, 2048).to(device)
                 motion_feat = torch.randn(B, 8, 2048).to(device)
@@ -281,10 +280,11 @@ def validate( model, val_loader, epoch, args, acc_calculator):
 
 def reload( model, optimizer, path):
     checkpoint = torch.load(path)
-    model.load_state_dict(checkpoint['linguistic_bert_state_dict'])
+    model.load_state_dict(checkpoint['hcrn_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     global_step = checkpoint['global_step']
-    model.eval()
+    # model.eval()
+    return global_step
 
 
 if __name__ =='__main__':

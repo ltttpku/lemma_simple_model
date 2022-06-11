@@ -174,5 +174,4 @@ def process_questions(args):
 
 if __name__ == '__main__':
     # video_paths = load_video_paths(None)
-    # check_video()
     print('in main')

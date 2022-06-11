@@ -1,5 +1,5 @@
 # Assumption: *get_visual_embeddings(image)* gets the visual embeddings of the image.
-from transformers import BertTokenizer, MaxLengthCriteria, VisualBertModel
+from transformers import BertTokenizer, VisualBertModel
 import torch
 import torch.nn as nn
 import torchvision

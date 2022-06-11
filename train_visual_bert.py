@@ -34,19 +34,19 @@ def parse_args():
                         )
     parser.add_argument('--answer_set_path', type=str, default='data/answer_set.txt')
 
-    parser.add_argument("--batch_size", type=int, default=64, )
-    parser.add_argument("--nepoch", type=int, default=5,  
+    parser.add_argument("--batch_size", type=int, default=32, )
+    parser.add_argument("--nepoch", type=int, default=36,  
                         help='num of total epoches')
-    parser.add_argument("--lr", type=float, default=1e-3,  
+    parser.add_argument("--lr", type=float, default=5e-5,  
                         help='')
     
-    parser.add_argument("--i_val",   type=int, default=400, 
+    parser.add_argument("--i_val",   type=int, default=9000, 
                         help='frequency of console printout and metric loggin')
-    parser.add_argument("--i_test",   type=int, default=4000, 
+    parser.add_argument("--i_test",   type=int, default=3000, 
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_print",   type=int, default=6, 
                         help='frequency of console printout and metric loggin')
-    parser.add_argument("--i_weight", type=int, default=50000, 
+    parser.add_argument("--i_weight", type=int, default=3000, 
                         help='frequency of weight ckpt saving')
 
     parser.add_argument('--img_size', default=(224, 224))
@@ -68,8 +68,8 @@ def train(args):
     device = args.device
 
     train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
-    train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_func)
-    
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_func)
+    import pdb; pdb.set_trace()
     val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
     val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
 
@@ -98,8 +98,12 @@ def train(args):
     train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
     test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
 
-
-    global_step = 0
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(cnn, model=visualbert, optimizer=optimizer, path=args.reload_model_path)
+    
+    global_step = reload_step
     TIMESTAMP = "{0:%Y-%m-%dT%H-%M-%S/}".format(datetime.now())
     log_dir = os.path.join(args.basedir, 'events', TIMESTAMP)
     os.makedirs(log_dir)
@@ -171,7 +175,7 @@ def train(args):
                 log_file.write(f'[TEST]: epoch: {epoch}, global_step: {global_step}\n')
                 log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}\nall count dct: {test_acc_calculator.all_count_dct}\n\n')
 
-            if (global_step) % args.i_weight == 0:
+            if (global_step) % args.i_weight == 0 and global_step >= 17000:
                 torch.save({
                     'cnn_state_dict': cnn.state_dict(),
                     'visualbert_state_dict': visualbert.state_dict(),
@@ -203,7 +207,7 @@ def validate(cnn, visualbert, val_loader, epoch, args, acc_calculator):
     print('validating...')
     with torch.no_grad():
         starttime = time.time()
-        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(val_loader):
+        for i, (frame_rgbs, question_encode, answer_encode, frame_features, _, question, reasoning_type_lst) in enumerate(tqdm(val_loader)):
             
             B, num_frame_per_video, C, H, W = frame_rgbs.shape
             frame_rgbs, question_encode, answer_encode = frame_rgbs.to(args.device), question_encode.to(args.device), answer_encode.to(args.device)
@@ -216,14 +220,13 @@ def validate(cnn, visualbert, val_loader, epoch, args, acc_calculator):
             logits = visualbert(question, frame_features)
 
             all_loss += nn.CrossEntropyLoss().to(device)(logits, answer_encode.long())
-            print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
-            starttime = time.time()
+            # print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
+            # starttime = time.time()
             pred = torch.argmax(logits, dim=1)
             test_acc = sum(pred == answer_encode) / B
             all_acc += test_acc
 
             acc_calculator.update(reasoning_type_lst, pred, answer_encode)
-
 
     all_loss /= len(val_loader)
     all_acc /= len(val_loader)
@@ -231,14 +234,13 @@ def validate(cnn, visualbert, val_loader, epoch, args, acc_calculator):
     return all_loss, all_acc
 
 
-def reload(cnn, visualbert, optimizer, path):
+def reload(cnn, model, optimizer, path):
     checkpoint = torch.load(path)
     cnn.load_state_dict(checkpoint['cnn_state_dict'])
-    visualbert.load_state_dict(checkpoint['visualbert_state_dict'])
+    model.load_state_dict(checkpoint['visualbert_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     global_step = checkpoint['global_step']
-    cnn.eval()
-    visualbert.eval()
+    return global_step
 
 if __name__ =='__main__':
     args = parse_args()

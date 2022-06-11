@@ -13,6 +13,7 @@ import argparse, time, pickle
 
 from dataset.hme_dataset import LEMMA, collate_func
 from model.HME.attention_module_lite import *
+from utils.utils import ReasongingTypeAccCalculator
 
 
 def parse_args():
@@ -31,19 +32,19 @@ def parse_args():
                         )
     parser.add_argument('--answer_set_path', type=str, default='data/answer_set.txt')
 
-    parser.add_argument("--batch_size", type=int, default=64, )
-    parser.add_argument("--nepoch", type=int, default=5,  
+    parser.add_argument("--batch_size", type=int, default=32, )
+    parser.add_argument("--nepoch", type=int, default=33,  
                         help='num of total epoches')
     parser.add_argument("--lr", type=float, default=1e-3,  
                         help='')
     
-    parser.add_argument("--i_val",   type=int, default=400, 
+    parser.add_argument("--i_val",   type=int, default=10000, 
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_test",   type=int, default=4000, 
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_print",   type=int, default=6, 
                         help='frequency of console printout and metric loggin')
-    parser.add_argument("--i_weight", type=int, default=50000, 
+    parser.add_argument("--i_weight", type=int, default=4000, 
                         help='frequency of weight ckpt saving')
 
     parser.add_argument('--img_size', default=(224, 224))
@@ -66,7 +67,7 @@ def train(args):
     device = args.device
 
     train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.video_feature_path)
-    train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_func)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_func)
     
     val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.video_feature_path)
     val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
@@ -99,7 +100,18 @@ def train(args):
     criterion = nn.CrossEntropyLoss(size_average=True).to(device)
     optimizer = optim.Adam(my_rnn.parameters(), lr=args.lr)
 
-    global_step = 0
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(model=my_rnn, optimizer=optimizer, path=args.reload_model_path)
+    
+    with open('data/all_reasoning_types.txt', 'r') as reasonf:
+        all_reasoning_types = reasonf.readlines()
+        all_reasoning_types = [item.strip() for item in all_reasoning_types]
+    train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+    test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+
+    global_step = reload_step
     TIMESTAMP = "{0:%Y-%m-%dT%H-%M-%S/}".format(datetime.now())
     log_dir = os.path.join(args.basedir, 'events', TIMESTAMP)
     os.makedirs(log_dir)
@@ -108,6 +120,7 @@ def train(args):
             f.write('%s:%s\n'%(key, value))
             print(key, value)
 
+    log_file = open(os.path.join(log_dir, 'log.txt'), 'w')
     writer = SummaryWriter(log_dir=log_dir)
 
     os.makedirs(os.path.join(args.basedir, 'ckpts'), exist_ok=True)
@@ -115,7 +128,8 @@ def train(args):
 
     for epoch in range(args.nepoch):
         my_rnn.train()
-        for i, (question_encode, answer_encode, vgg, c3d, question_length_lst) in enumerate(train_dataloader):
+        train_acc_calculator.reset()
+        for i, (question_encode, answer_encode, vgg, c3d, question_length_lst, reasoning_type_lst) in enumerate(train_dataloader):
             B, q_len = question_encode.shape
             question_encode, answer_encode, vgg, c3d = question_encode.to(device), answer_encode.to(device), vgg.to(device), c3d.to(device)
             
@@ -138,8 +152,9 @@ def train(args):
             loss.backward()
             optimizer.step()
             acc = my_rnn.accuracy(predictions, targets)
-
-
+            
+            train_acc_calculator.update(reasoning_type_lst, predictions, targets)
+            
             writer.add_scalar('train/loss', loss.item(), global_step)
             writer.add_scalar('learning rates', optimizer.param_groups[0]['lr'], global_step)
             writer.add_scalar('train/acc', acc, global_step)
@@ -147,17 +162,30 @@ def train(args):
             if global_step % args.i_print  == 0:
                 print(f"global_step:{global_step}, train_loss:{loss.item()}, train_acc:{acc}")
 
-            if (global_step) % args.i_val == 0:
-                val_loss, val_acc = validate(my_rnn, val_dataloader, epoch, args)
+            if (global_step) % args.i_val == 0 and global_step >= 400:
+                test_acc_calculator.reset()
+                val_loss, val_acc = validate(my_rnn, val_dataloader, epoch, args, acc_calculator=test_acc_calculator)
                 writer.add_scalar('val/loss', val_loss.item(), global_step)
                 writer.add_scalar('val/acc', val_acc, global_step)
-            
-            if (global_step) % args.i_test == 0:
-                test_loss, test_acc = validate(my_rnn, test_dataloader, epoch, args)
+                acc_dct = test_acc_calculator.get_acc()
+                for key, value in acc_dct.items():
+                    writer.add_scalar(f'val/reasoning_{key}', value, global_step)
+                log_file.write(f'[VAL]: epoch: {epoch}, global_step: {global_step}\n')
+                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}\nall count dct: {test_acc_calculator.all_count_dct}\n\n')
+
+            if (global_step) % args.i_test == 0 and global_step >= 4000:
+                test_acc_calculator.reset()
+                test_loss, test_acc = validate(my_rnn, test_dataloader, epoch, args, acc_calculator=test_acc_calculator)
                 writer.add_scalar('test/loss', test_loss.item(), global_step)
                 writer.add_scalar('test/acc', test_acc, global_step)
+                acc_dct = test_acc_calculator.get_acc()
+                for key, value in acc_dct.items():
+                    writer.add_scalar(f'test/reasoning_{key}', value, global_step)
+                log_file.write(f'[TEST]: epoch: {epoch}, global_step: {global_step}\n')
+                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}\nall count dct: {test_acc_calculator.all_count_dct}\n\n')
 
-            if (global_step) % args.i_weight == 0:
+
+            if (global_step) % args.i_weight == 0 and global_step >= 8000:
                 torch.save({
                     'my_rnn_state_dict': my_rnn.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
@@ -167,18 +195,27 @@ def train(args):
             pbar.update(1)
             global_step += 1
 
+        acc_dct = train_acc_calculator.get_acc()
+        for key, value in acc_dct.items():
+            writer.add_scalar(f'train/reasoning_{key}', value, global_step)
+        log_file.write(f'[TRAIN]: epoch: {epoch}, global_step: {global_step}\n')
+        log_file.write(f'true count dct: {train_acc_calculator.true_count_dct}\nall count dct: {train_acc_calculator.all_count_dct}\n\n')
+        log_file.flush()
+
+
 def test(args):
     pass
 
-def validate(my_rnn, val_loader, epoch, args):
+def validate(my_rnn, val_loader, epoch, args, acc_calculator):
     my_rnn.eval()
     all_acc = 0
     all_loss = 0
     batch_size = args.batch_size
-    
+    acc_calculator.reset()
     starttime = time.time()
+    print('validating...')
     with torch.no_grad():
-        for i, (question_encode, answer_encode, vgg, c3d, question_length_lst) in enumerate(val_loader):
+        for i, (question_encode, answer_encode, vgg, c3d, question_length_lst, reasoning_type_lst) in enumerate(tqdm(val_loader)):
             B, q_len = question_encode.shape
             question_encode, answer_encode, vgg, c3d = question_encode.to(device), answer_encode.to(device), vgg.to(device), c3d.to(device)
             
@@ -201,8 +238,9 @@ def validate(my_rnn, val_loader, epoch, args):
             acc = my_rnn.accuracy(predictions, targets)
             all_loss += loss
             all_acc += acc
-            print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
-            starttime = time.time()
+            # print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
+            # starttime = time.time()
+            acc_calculator.update(reasoning_type_lst, predictions, targets)
 
     all_loss /= len(val_loader)
     all_acc /= len(val_loader)
@@ -210,12 +248,12 @@ def validate(my_rnn, val_loader, epoch, args):
     return all_loss, all_acc
 
 
-def reload(my_rnn, optimizer, path):
+def reload(model, optimizer, path):
     checkpoint = torch.load(path)
-    my_rnn.load_state_dict(checkpoint['my_rnn_state_dict'])
+    model.load_state_dict(checkpoint['my_rnn_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     global_step = checkpoint['global_step']
-    my_rnn.eval()
+    return global_step
 
 if __name__ =='__main__':
     args = parse_args()

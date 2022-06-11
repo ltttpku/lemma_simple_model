@@ -1,21 +1,36 @@
 # lemma_simple_model
 
-## TODO
-+ dataset/dataset.py: visual feature preload! DONE: reduce training time from 6h to 30min :p
-+ QA distribution statistics?
+## NEW SPLIT PREPROCESS
++ put train_qas.json, test_qas.json, val_qas.json, tagged_qa.json to data/
 
++ python hcrn_preprocess/preprocess_vocab.py
+  + train_qas.json --> lemma-qa_vocab.json
+  + may need to add "has", "that" to lemma-qa_vocab.json
 
-|        MODEL         | add reasoning_type_acc calculator | ALL_ACC |
-|        ----           |         :----:                 | :----: |  
-|  cnn_lstm                        |       1      |       >0.37       |
-| visual_bert(from_pretrained)     |       1      |       0.757       |
-|  pure_lstm                       |       0      |       0.37        |
-| linguistic_bert(from_pretrained) |       1      |       0.68    |
-|  hme                             |       0      |        -        |
-|  hga                             |       0      |        -        |
-|  psac                            |       1      |        -        |
-| hcrn                             |     1       |       >0.58      |
-| hcrn(w/o visual)                 |     1        |      >0.50     |
++ python hme_preprocess/mode_qas2mode_qas_encode.py
+  + {mode}_qas.json， lemma-qa_vocab.json --> {mode}_qas_encode.json, answer_set.txt, vocab.txt
+  
++ python preprocess/generate_glove_matrix.py
+  + vocab.txt --> glove.pt
+  
++ python preprocess/generate_char_vocab.py
+  + tagged_qas.json --> char_vocab.txt
+  
++ python preprocess/format_mode_qas_encode.py {mode}
+  + need to define max_word_len for psac (args.char_max_len)
+  + need to define max_sentence_len for psac, visual_bert and linguistic_bert(args.max_len)
+  
++ python preprocess/reasoning_types.py
+  + tagged_qas.json -->all_reasoning_types.txt
+
+## TRAIN
+```bash
+$ python train_hme.py --nepoch 33 --i_val 10000 --i_test 4000 --batch_size 32 --i_weight 4000
+
+$ python train_hga.py --nepoch 150 --i_val 30000 --i_test 3000 --lr 1e-4 --batch_size 64 --i_weight 3000
+
+$ ...
+```
 
 
 ## Preprocess
@@ -116,7 +131,10 @@ $ python preprocess/reasoning_types.py
 ## Train
 
 ```bash
-$ python train_xxx.py
+$ python train_linguistic_bert.py --lr 5e-5 --nepoch 35 --i_val 2000 --i_test 4000
+
+$ python train_hcrn.py --batch_size 64 --lr 1e-4 --without_visual 1 --i_val 1500 --i_test 3000 --nepoch 10
+
 ```
 
 > tensorboard --logdir cnn_lstm_logs/events

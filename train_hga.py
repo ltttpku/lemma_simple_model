@@ -33,6 +33,7 @@ def _init_fn(worker_id):
 
 from model.HGA.models.lstm_cross_cycle_gcn_dropout import LSTMCrossCycleGCNDropout
 from dataset.hme_dataset import LEMMA, collate_func
+from utils.utils import ReasongingTypeAccCalculator
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -52,16 +53,16 @@ def parse_args():
                         )
     parser.add_argument('--answer_set_path', type=str, default='data/answer_set.txt')
 
-    parser.add_argument("--nepoch", type=int, default=5,  
+    parser.add_argument("--nepoch", type=int, default=150,  
                         help='num of total epoches')
     
-    parser.add_argument("--i_val",   type=int, default=400, 
+    parser.add_argument("--i_val",   type=int, default=10000, 
                         help='frequency of console printout and metric loggin')
-    parser.add_argument("--i_test",   type=int, default=4000, 
+    parser.add_argument("--i_test",   type=int, default=3000, 
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_print",   type=int, default=6, 
                         help='frequency of console printout and metric loggin')
-    parser.add_argument("--i_weight", type=int, default=50000, 
+    parser.add_argument("--i_weight", type=int, default=3000, 
                         help='frequency of weight ckpt saving')
 
     parser.add_argument('--img_size', default=(224, 224))
@@ -89,7 +90,7 @@ def parse_args():
         type=int,
         default=1,
         help='number of layers in transformer')
-    parser.add_argument("--batch_size", type=int, default=128, )
+    parser.add_argument("--batch_size", type=int, default=64, )
     parser.add_argument('--max_n_videos', type=int, default=100000)
     parser.add_argument('--num_workers', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.0001)
@@ -135,13 +136,13 @@ def train(args):
     device = args.device
 
     train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.video_feature_path)
-    train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_func)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, collate_fn=collate_func)
     
     val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.video_feature_path)
-    val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
+    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, collate_fn=collate_func)
 
     test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.video_feature_path)
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, collate_fn=collate_func)
     
     with open(args.answer_set_path, 'r') as ansf:
         answers = ansf.readlines()
@@ -234,8 +235,18 @@ def train(args):
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer, milestones=args.lr_list, gamma=0.1)
 
+    with open('data/all_reasoning_types.txt', 'r') as reasonf:
+        all_reasoning_types = reasonf.readlines()
+        all_reasoning_types = [item.strip() for item in all_reasoning_types]
+    train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+    test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
 
-    global_step = 0
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(model=model, optimizer=optimizer, path=args.reload_model_path)
+    
+    global_step = reload_step
     TIMESTAMP = "{0:%Y-%m-%dT%H-%M-%S/}".format(datetime.now())
     log_dir = os.path.join(args.basedir, 'events', TIMESTAMP)
     os.makedirs(log_dir)
@@ -244,6 +255,7 @@ def train(args):
             f.write('%s:%s\n'%(key, value))
             print(key, value)
 
+    log_file = open(os.path.join(log_dir, 'log.txt'), 'w')
     writer = SummaryWriter(log_dir=log_dir)
 
     os.makedirs(os.path.join(args.basedir, 'ckpts'), exist_ok=True)
@@ -253,6 +265,7 @@ def train(args):
         print('Start Training Epoch: {}'.format(epoch))
 
         model.train()
+        train_acc_calculator.reset()
 
         loss_list = []
         prediction_list = []
@@ -262,7 +275,7 @@ def train(args):
             # consine annealing
             scheduler_warmup.step(epoch=epoch)
 
-        for i, (question_encode, answer_encode, vgg, c3d, question_length_lst) in enumerate(train_dataloader):
+        for i, (question_encode, answer_encode, vgg, c3d, question_length_lst, reasoning_type_lst) in enumerate(train_dataloader):
             B, q_len = question_encode.shape
             B, v_len, _ = vgg.shape
             question_encode, answer_encode, vgg, c3d = question_encode.to(device), answer_encode.to(device), vgg.to(device), c3d.to(device)
@@ -283,7 +296,8 @@ def train(args):
             prediction_list.append(predictions.detach())
 
             acc = (torch.sum(answers == predictions).cpu().numpy()) / B
-
+            train_acc_calculator.update(reasoning_type_lst, predictions, answers)
+            
             writer.add_scalar('train/loss', loss.item(), global_step)
             writer.add_scalar('learning rates', optimizer.param_groups[0]['lr'], global_step)
             writer.add_scalar('train/acc', acc, global_step)
@@ -294,16 +308,29 @@ def train(args):
                 print(f"global_step:{global_step}, train_loss:{loss.item()}, train_acc:{acc}")
 
             if (global_step) % args.i_val == 0:
-                val_loss, val_acc = validate(model, val_dataloader, epoch, args, criterion)
+                test_acc_calculator.reset()
+                val_loss, val_acc = validate(model, val_dataloader, epoch, args, criterion, acc_calculator=test_acc_calculator)
                 writer.add_scalar('val/loss', val_loss.item(), global_step)
                 writer.add_scalar('val/acc', val_acc, global_step)
-            
+                acc_dct = test_acc_calculator.get_acc()
+                for key, value in acc_dct.items():
+                    writer.add_scalar(f'val/reasoning_{key}', value, global_step)
+                log_file.write(f'[VAL]: epoch: {epoch}, global_step: {global_step}\n')
+                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}\nall count dct: {test_acc_calculator.all_count_dct}\n\n')
+
             if (global_step) % args.i_test == 0:
-                test_loss, test_acc = validate(model, test_dataloader, epoch, args, criterion)
+                test_acc_calculator.reset()
+                test_loss, test_acc = validate(model, test_dataloader, epoch, args, criterion, acc_calculator=test_acc_calculator)
                 writer.add_scalar('test/loss', test_loss.item(), global_step)
                 writer.add_scalar('test/acc', test_acc, global_step)
+                acc_dct = test_acc_calculator.get_acc()
+                for key, value in acc_dct.items():
+                    writer.add_scalar(f'test/reasoning_{key}', value, global_step)
+                log_file.write(f'[TEST]: epoch: {epoch}, global_step: {global_step}\n')
+                log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}\nall count dct: {test_acc_calculator.all_count_dct}\n\n')
 
-            if (global_step) % args.i_weight == 0:
+
+            if (global_step) % args.i_weight == 0 and global_step >= 30000:
                 torch.save({
                     'hga_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
@@ -312,6 +339,14 @@ def train(args):
                 }, os.path.join(args.basedir, 'ckpts', f"model_{global_step}.tar"))
             
             global_step += 1
+        
+        acc_dct = train_acc_calculator.get_acc()
+        for key, value in acc_dct.items():
+            writer.add_scalar(f'train/reasoning_{key}', value, global_step)
+        log_file.write(f'[TRAIN]: epoch: {epoch}, global_step: {global_step}\n')
+        log_file.write(f'true count dct: {train_acc_calculator.true_count_dct}\nall count dct: {train_acc_calculator.all_count_dct}\n\n')
+        log_file.flush()
+
         
         train_loss = np.mean(loss_list)
         correct_answer = torch.cat(correct_answer_list, dim=0).long()
@@ -333,30 +368,36 @@ def train(args):
 
 
 @torch.no_grad()
-def validate(model, val_loader, epoch, args, criterion):
+def validate(model, val_loader, epoch, args, criterion, acc_calculator):
     model.eval()
-
+    print('validating ... ')
+    
     loss_list = []
     prediction_list = []
     correct_answer_list = []
-    starttime = time.time()
-    for i, (question_encode, answer_encode, vgg, c3d, question_length_lst) in enumerate(val_loader):
-            B, q_len = question_encode.shape
-            B, v_len, _ = vgg.shape
-            question_encode, answer_encode, vgg, c3d = question_encode.to(device), answer_encode.to(device), vgg.to(device), c3d.to(device)
-            
-            video_lengths = torch.from_numpy(np.array([v_len] * B)) # # fixed
-            question_lengths = torch.from_numpy(np.array(question_length_lst))
-            answer_type = 'open'
+    acc_calculator.reset()
 
-            out, predictions, answers, _ = model(args.task, vgg, c3d, video_lengths, question_encode, question_lengths, answer_encode, answer_type )
-            loss = criterion(out, answers)
-            
-            correct_answer_list.append(answers)
-            loss_list.append(loss.item())
-            prediction_list.append(predictions.detach())
-            print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
-            starttime = time.time()
+    starttime = time.time()
+    for i, (question_encode, answer_encode, vgg, c3d, question_length_lst, reasoning_type_lst) in enumerate(val_loader):
+        B, q_len = question_encode.shape
+        B, v_len, _ = vgg.shape
+        question_encode, answer_encode, vgg, c3d = question_encode.to(device), answer_encode.to(device), vgg.to(device), c3d.to(device)
+        
+        video_lengths = torch.from_numpy(np.array([v_len] * B)) # # fixed
+        question_lengths = torch.from_numpy(np.array(question_length_lst))
+        answer_type = 'open'
+
+        out, predictions, answers, _ = model(args.task, vgg, c3d, video_lengths, question_encode, question_lengths, answer_encode, answer_type )
+        loss = criterion(out, answers)
+        
+        correct_answer_list.append(answers)
+        loss_list.append(loss.item())
+        prediction_list.append(predictions.detach())
+        # print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
+        # starttime = time.time()
+        acc_calculator.update(reasoning_type_lst, predictions, answers)
+
+    print('validate cost:', time.time() - starttime, 's')
     val_loss = np.mean(loss_list)
     correct_answer = torch.cat(correct_answer_list, dim=0).long()
     predict_answer = torch.cat(prediction_list, dim=0).long()
@@ -371,6 +412,16 @@ def validate(model, val_loader, epoch, args, criterion):
     
     model.train()
     return val_loss, acc
+
+
+def reload( model, optimizer, path):
+    checkpoint = torch.load(path)
+    model.load_state_dict(checkpoint['hga_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    global_step = checkpoint['global_step']
+    # model.eval()
+    return global_step
+
 
 
 if __name__ =='__main__':

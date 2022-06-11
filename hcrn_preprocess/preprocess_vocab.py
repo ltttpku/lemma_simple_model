@@ -31,7 +31,7 @@ def preprocess_vocab(args):
     print("Top %i answers account for %f%%" % (len(frequent_answers), total_freq_ans * 100.0 / total_ans))
 
     for token, cnt in Counter(answer_cnt).most_common(args.answer_top):
-        answer_token_to_idx[token] = len(answer_token_to_idx)
+        answer_token_to_idx[token.lower()] = len(answer_token_to_idx)
     print('Get answer_token_to_idx, num: %d' % len(answer_token_to_idx))
 
     question_token_to_idx = {'<NULL>': 0, '<UNK>': 1}
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     # parser.add_argument('--glove_pt',
     #                     help='glove pickle file, should be a map whose key are words and value are word vectors represented by numpy arrays. Only needed in train mode')
     # parser.add_argument('--output_pt', type=str, default='data/{}/{}_{}_questions.pt')
-    parser.add_argument('--vocab_json', type=str, default='data/hcrn_data/{}_vocab.json')
+    parser.add_argument('--vocab_json', type=str, default='data/{}_vocab.json')
     parser.add_argument('--mode', choices=['train', 'val', 'test'])
     # parser.add_argument('--question_type', choices=['frameqa', 'action', 'transition', 'count', 'none'], default='none')
     parser.add_argument('--seed', type=int, default=666)
@@ -68,6 +68,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     np.random.seed(args.seed)
 
-    args.annotation_file = 'data/hcrn_data/tagged_qas.json'
+    args.annotation_file = 'data/train_qas.json'
 
     preprocess_vocab(args=args)

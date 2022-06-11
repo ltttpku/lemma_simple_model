@@ -29,15 +29,9 @@ with open('data/char_vocab.txt', 'r') as charf:
                     question_encode.append(int(word))
                 qa['question_encode'] = question_encode
 
-                if mode == 'train':
-                    answer_encode = int(qa['answer_encode'])
-                    qa['answer_encode'] = answer_encode
-                else:
-                    if qa['answer'] in answer_set:
-                        qa['answer_encode'] = answer_set.index(qa['answer'])
-                    else:
-                        qa['answer_encode'] = answer_set.index('<UNK>')
-                        
+                answer_encode = int(qa['answer_encode'])
+                qa['answer_encode'] = answer_encode
+                
                 char_tokens = []
                 # sentence = qa['question'].lower().replace(',', '').replace('?', '').replace('\'s', ' \'s')
                 # words = sentence.split()

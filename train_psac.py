@@ -25,19 +25,19 @@ def parse_args():
     parser.add_argument('--task', type=str, default='FrameQA',help='FrameQA, Count, Action, Trans')
     parser.add_argument('--num_hid', type=int, default=512)
     parser.add_argument('--model', type=str, default='temporalAtt', help='temporalAtt')
-    parser.add_argument('--max_len',type=int, default=50)
+    parser.add_argument('--max_len',type=int, default=50) # # Lq = 50, defined in code_file/models/language_model.py, = args.max_len
     parser.add_argument('--char_max_len', type=int, default=17)
-    parser.add_argument('--num_frame', type=int, default=36)
+    parser.add_argument('--num_frame', type=int, default=20)
     parser.add_argument('--output', type=str, default='saved_models/%s/exp-11')
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--seed', type=int, default=1000, help='random seed')
     parser.add_argument('--sentense_file_path',type=str, default='./data/dataset')
     parser.add_argument('--glove_file_path', type=str, default='/home/leiting/scratch/hcrn-videoqa/data/glove/glove.840B.300d.txt')
     parser.add_argument('--feat_category',type=str,default='resnet')
-    parser.add_argument('--feat_path',type=str,default='/mnt/data2/lixiangpeng/dataset/tgif/features')
-    parser.add_argument('--Multi_Choice',type=int, default=5)
+    # parser.add_argument('--feat_path',type=str,default='/mnt/data2/lixiangpeng/dataset/tgif/features')
+    # parser.add_argument('--Multi_Choice',type=int, default=5)
     parser.add_argument('--vid_enc_layers', type=int, default=1)
-    parser.add_argument('--test_phase', type=bool, default=False)
+    # parser.add_argument('--test_phase', type=bool, default=False)
 
     # # 
     parser.add_argument("--basedir", type=str, default='psac_logs', 
@@ -54,18 +54,18 @@ def parse_args():
                         )
     parser.add_argument('--answer_set_path', type=str, default='data/answer_set.txt')
 
-    parser.add_argument("--nepoch", type=int, default=5,  
+    parser.add_argument("--nepoch", type=int, default=70,  
                         help='num of total epoches')
     parser.add_argument("--lr", type=float, default=1e-3,  
                         help='')
     
-    parser.add_argument("--i_val",   type=int, default=400, 
+    parser.add_argument("--i_val",   type=int, default=20000, 
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_test",   type=int, default=4000, 
                         help='frequency of console printout and metric loggin')
     parser.add_argument("--i_print",   type=int, default=6, 
                         help='frequency of console printout and metric loggin')
-    parser.add_argument("--i_weight", type=int, default=50000, 
+    parser.add_argument("--i_weight", type=int, default=4000, 
                         help='frequency of weight ckpt saving')
 
     parser.add_argument('--question_pt_path', type=str, default='data/glove.pt')
@@ -73,7 +73,7 @@ def parse_args():
     parser.add_argument('--c_emb_dim', type=int, default=64, help='dim of char_embedding')
 
     parser.add_argument('--img_size', default=(224, 224))
-    parser.add_argument('--num_frames_per_video', type=int, default=36)
+    parser.add_argument('--num_frames_per_video', type=int, default=20)
     parser.add_argument('--cnn_modelname', type=str, default='resnet101')
     parser.add_argument('--cnn_pretrained', type=bool, default=True)
 
@@ -121,17 +121,23 @@ def train(args):
                              num_hid=args.num_hid, word_mat=word_mat, char_mat=char_mat).to(device)
 
     
-    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
-    train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True, collate_fn=collate_func, pin_memory=True)
+    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json', )
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,drop_last=True, collate_fn=collate_func, pin_memory=True)
     
     val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
-    val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
+    val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True,drop_last=True, collate_fn=collate_func)
 
     test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
-    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True,drop_last=True, collate_fn=collate_func)
 
     criterion = nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.Adam(my_model.parameters(), lr=args.lr)
+    # optimizer = torch.optim.Adam(my_model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adamax(my_model.parameters())  
+
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(cnn, model=my_model, optimizer=optimizer, path=args.reload_model_path)
     
     with open('data/all_reasoning_types.txt', 'r') as reasonf:
         all_reasoning_types = reasonf.readlines()
@@ -140,7 +146,7 @@ def train(args):
     test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
 
 
-    global_step = 0
+    global_step = reload_step
     TIMESTAMP = "{0:%Y-%m-%dT%H-%M-%S/}".format(datetime.now())
     log_dir = os.path.join(args.basedir, 'events', TIMESTAMP)
     os.makedirs(log_dir)
@@ -229,7 +235,7 @@ def train(args):
                 log_file.write(f'true count dct: {test_acc_calculator.true_count_dct}\nall count dct: {test_acc_calculator.all_count_dct}\n\n')
 
 
-            if (global_step) % args.i_weight == 0:
+            if (global_step) % args.i_weight == 0 and global_step >= 32000:
                 torch.save({
                     'cnn_state_dict': cnn.state_dict(),
                     'psac_state_dict': my_model.state_dict(),
@@ -278,24 +284,23 @@ def validate(cnn, psac, val_loader, epoch, args, acc_calculator):
 
             all_loss += loss
             all_acc += train_acc
-            print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
-            starttime = time.time()
+            # print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
+            # starttime = time.time()
             acc_calculator.update(reasoning_type_lst, pred, answer_encode)
-
+    print('validate cost', time.time() - starttime, 's')
     psac.train()
     return all_loss / len(val_loader), all_acc / len(val_loader)
 
 def test(args):
     pass
     
-def reload(cnn, lstm, optimizer, path):
+def reload(cnn, model, optimizer, path):
     checkpoint = torch.load(path)
     cnn.load_state_dict(checkpoint['cnn_state_dict'])
-    lstm.load_state_dict(checkpoint['lstm_state_dict'])
+    model.load_state_dict(checkpoint['psac_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     global_step = checkpoint['global_step']
-    cnn.eval()
-    lstm.eval()
+    return global_step
 
 if __name__ =='__main__':
     args = parse_args()
