@@ -68,7 +68,7 @@ def parse_args():
     parser.add_argument('--img_size', default=(224, 224))
     parser.add_argument('--num_frames_per_video', type=int, default=20)
 
-    parser.add_argument('--video_feature_path', type=str, default='/home/leiting/scratch/lemma_simple_model/data/video_feature_20.h5')
+    parser.add_argument('--video_feature_path', type=str, default='data/video_feature_20.h5')
 
     parser.add_argument('--test_only', default=False, type=bool)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')

@@ -52,7 +52,7 @@ def parse_args():
     parser.add_argument('--cnn_modelname', type=str, default='resnet101')
     parser.add_argument('--cnn_pretrained', type=bool, default=True)
     parser.add_argument('--output_dim', type=int, default=1)
-    parser.add_argument('--video_feature_path', type=str, default='/home/leiting/scratch/lemma_simple_model/data/video_feature_20.h5')
+    parser.add_argument('--video_feature_path', type=str, default='data/video_feature_20.h5')
 
     parser.add_argument('--test_only', default=False, type=bool)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')

@@ -53,6 +53,7 @@ def parse_args():
     parser.add_argument('--cnn_pretrained', type=bool, default=True)
     parser.add_argument('--output_dim', type=int, default=1)
     parser.add_argument('--use_preprocessed_features', type=int, default=1)
+    parser.add_argument('--feature_base_path', type=str, default='/scratch/generalvision/LEMMA/video_features')
 
     parser.add_argument('--test_only', default=False, type=bool)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
@@ -65,13 +66,16 @@ def parse_args():
 def train(args):
     device = args.device
 
-    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
+    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features,
+                         all_qa_interval_path='data/vid_intervals.json', feature_base_path=args.feature_base_path)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_func)
     
-    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
+    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features,
+                        all_qa_interval_path='data/vid_intervals.json', feature_base_path=args.feature_base_path)
     val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
 
-    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features, all_qa_interval_path='/scratch/generalvision/LEMMA/vid_intervals.json')
+    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features,
+                         all_qa_interval_path='data/vid_intervals.json', feature_base_path=args.feature_base_path)
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
     
     with open(args.answer_set_path, 'r') as ansf:
