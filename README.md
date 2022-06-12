@@ -2,6 +2,10 @@
 
 
 ## PREPROCESS
+```bash
+$ cd lemma_simple_model
+$ mkdir data
+```
 + download & put video_feature_20.h5 to data/ , 
 + download & put lemma-qa_appearance_feat.h5  lemma-qa_motion_feat.h5 to data/hcrn_data/
 
