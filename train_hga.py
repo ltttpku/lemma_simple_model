@@ -198,6 +198,13 @@ def train(args):
         ablation=args.ablation)
     model.to(device)
 
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        model = torch.load(args.reload_model_path, )
+        # reload_step = reload(model=model, optimizer=optimizer, path=args.reload_model_path)
+    
+
     criterion = nn.CrossEntropyLoss(size_average=True).to(device)
     if args.change_lr == 'none':
         optimizer = torch.optim.Adam(
@@ -241,11 +248,6 @@ def train(args):
     train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
     test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
 
-    reload_step = 0
-    if args.reload_model_path != '':
-        print('reloading model from', args.reload_model_path)
-        reload_step = reload(model=model, optimizer=optimizer, path=args.reload_model_path)
-    
     global_step = reload_step
     TIMESTAMP = "{0:%Y-%m-%dT%H-%M-%S/}".format(datetime.now())
     log_dir = os.path.join(args.basedir, 'events', TIMESTAMP)
@@ -331,12 +333,7 @@ def train(args):
 
 
             if (global_step) % args.i_weight == 0 and global_step >= 30000:
-                torch.save({
-                    'hga_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'loss': loss,
-                    'global_step': global_step,
-                }, os.path.join(args.basedir, 'ckpts', f"model_{global_step}.tar"))
+                torch.save(model, os.path.join(args.basedir, 'ckpts', f"model_{global_step}.pth"))
             
             global_step += 1
         
@@ -414,13 +411,13 @@ def validate(model, val_loader, epoch, args, criterion, acc_calculator):
     return val_loss, acc
 
 
-def reload( model, optimizer, path):
-    checkpoint = torch.load(path)
-    model.load_state_dict(checkpoint['hga_state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    global_step = checkpoint['global_step']
-    # model.eval()
-    return global_step
+# def reload( model, optimizer, path):
+#     checkpoint = torch.load(path)
+#     model.load_state_dict(checkpoint['hga_state_dict'])
+#     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+#     global_step = checkpoint['global_step']
+#     # model.eval()
+#     return global_step
 
 
 

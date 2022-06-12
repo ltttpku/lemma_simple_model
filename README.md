@@ -1,6 +1,17 @@
 # lemma_simple_model
 
+## ENV
+```yml
+python==3.8
+torch==1.10.1+cu111
+torchvision==0.11.2+cu111
+tqdm
+tensorboard
+```
+
 ## NEW SPLIT PREPROCESS
++ download & put video_feature_20.h5 to data/ , 
++ download & put lemma-qa_appearance_feat.h5  lemma-qa_motion_feat.h5 to data/hcrn_data/
 + put train_qas.json, test_qas.json, val_qas.json, tagged_qa.json to data/
 
 + python preprocess/preprocess_vocab.py
@@ -11,6 +22,7 @@
   + {mode}_qas.json， lemma-qa_vocab.json --> {mode}_qas_encode.json, answer_set.txt, vocab.txt
   
 + python preprocess/generate_glove_matrix.py
+  + need to set glove path
   + vocab.txt --> glove.pt
   
 + python preprocess/generate_char_vocab.py
