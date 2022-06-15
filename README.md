@@ -8,6 +8,7 @@ $ mkdir data
 ```
 + download & put video_feature_20.h5 to data/ , 
 + download & put lemma-qa_appearance_feat.h5  lemma-qa_motion_feat.h5 to data/hcrn_data/
++ download & put video_features to $FEATURE_BASE_PATH
 
 + put train_qas.json, test_qas.json, val_qas.json, tagged_qa.json, vid_intervals.json to data/
 
