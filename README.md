@@ -90,7 +90,7 @@ For bert-based model, you need to set BertTokenizer_CKPT and BertModel_CKPT for 
 + For visual_bert, set BertTokenizer_CKPT="bert-base-uncased", VisualBertModel_CKPT="uclanlp/visualbert-vqa-coco-pre".
 
 ## Reload ckpts & test_only
-
+To reload checkpoints and only run inference on test_qas, run the following command:
 
 ```bash
 $ python $TRAIN_MODEL_PY --base_data_dir $BASE_DATA_DIR --reload_model_path $RELOAD_MODEL_PATH --test_only 1
