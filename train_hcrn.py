@@ -31,15 +31,15 @@ def parse_args():
                         help='where to store ckpts and logs')
     
     parser.add_argument("--train_data_file_path", type=str, 
-                        default='data/formatted_train_qas_encode.json', 
+                        default='{}/formatted_train_qas_encode.json', 
                         )
     parser.add_argument("--test_data_file_path", type=str, 
-                        default='data/formatted_test_qas_encode.json', 
+                        default='{}/formatted_test_qas_encode.json', 
                         )
     parser.add_argument("--val_data_file_path", type=str, 
-                        default='data/formatted_val_qas_encode.json', 
+                        default='{}/formatted_val_qas_encode.json', 
                         )
-    parser.add_argument('--answer_set_path', type=str, default='data/answer_set.txt')
+    parser.add_argument('--answer_set_path', type=str, default='{}/answer_set.txt')
 
     parser.add_argument("--batch_size", type=int, default=32, )
     parser.add_argument("--nepoch", type=int, default=60,  
@@ -61,36 +61,32 @@ def parse_args():
     parser.add_argument('--test_only', default=False, type=bool)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
 
-    parser.add_argument('--question_pt_path', type=str, default='data/glove.pt')
+    parser.add_argument('--question_pt_path', type=str, default='{}/glove.pt')
     parser.add_argument('--without_visual', type=int, default=0)
 
+    parser.add_argument('--base_data_dir', type=str, default='data')
     args = parser.parse_args()
     return args
 
 def train(args):
     device = args.device
 
-    # dataset = LEMMA('/home/leiting/scratch/lemma_simple_model/data/formatted_test_qas_encode.json', 
-    #                 mode='train',
-    #                 app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
-    #                 motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
-
-    train_dataset = LEMMA(args.train_data_file_path, 'train', 
+    train_dataset = LEMMA(args.train_data_file_path.format(args.base_data_dir), 'train', 
                     app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
                     motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_func)
     
-    val_dataset = LEMMA(args.val_data_file_path, 'val', 
+    val_dataset = LEMMA(args.val_data_file_path.format(args.base_data_dir), 'val', 
                     app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
                     motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
     val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
 
-    test_dataset = LEMMA(args.test_data_file_path, 'test', 
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), 'test', 
                     app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
                     motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
     test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
     
-    with open(args.answer_set_path, 'r') as ansf:
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
         answers = ansf.readlines()
         args.output_dim = len(answers) # # output_dim == len(answers)
 
@@ -100,7 +96,7 @@ def train(args):
     args.k_max_frame_level = 16
     args.k_max_clip_level = 8
     args.spl_resolution = 1
-    vocab_dct = json.load(open('data/hcrn_data/lemma-qa_vocab.json', 'r'))
+    vocab_dct = json.load(open('{}/lemma-qa_vocab.json'.format(args.base_data_dir), 'r'))
     args.question_type = 'none'
 
     model_kwargs = {
@@ -115,7 +111,7 @@ def train(args):
     }
 
     # glove_matrix = torch.rand(201, 300).to(device)
-    with open(args.question_pt_path, 'rb') as f:
+    with open(args.question_pt_path.format(args.base_data_dir), 'rb') as f:
         obj = pickle.load(f)
         glove_matrix = obj['glove']
     glove_matrix = torch.FloatTensor(glove_matrix).to(device)
@@ -132,7 +128,7 @@ def train(args):
         print('reloading model from', args.reload_model_path)
         reload_step = reload(model=model, optimizer=optimizer, path=args.reload_model_path)
     
-    with open('data/all_reasoning_types.txt', 'r') as reasonf:
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
         all_reasoning_types = reasonf.readlines()
         all_reasoning_types = [item.strip() for item in all_reasoning_types]
     train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)

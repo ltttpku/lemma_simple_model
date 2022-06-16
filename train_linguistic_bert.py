@@ -11,6 +11,8 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 import argparse, time
 
+from yaml import parse
+
 from dataset.dataset import LEMMA, collate_func
 # from MY_BERT.model.model import BERT
 import model.linguistic_bert as linguistic_bert
@@ -22,15 +24,15 @@ def parse_args():
                         help='where to store ckpts and logs')
     
     parser.add_argument("--train_data_file_path", type=str, 
-                        default='data/formatted_train_qas_encode.json', 
+                        default='{}/formatted_train_qas_encode.json', 
                         )
     parser.add_argument("--test_data_file_path", type=str, 
-                        default='data/formatted_test_qas_encode.json', 
+                        default='{}/formatted_test_qas_encode.json', 
                         )
     parser.add_argument("--val_data_file_path", type=str, 
-                        default='data/formatted_val_qas_encode.json', 
+                        default='{}/formatted_val_qas_encode.json', 
                         )
-    parser.add_argument('--answer_set_path', type=str, default='data/answer_set.txt')
+    parser.add_argument('--answer_set_path', type=str, default='{}/answer_set.txt')
 
     parser.add_argument("--batch_size", type=int, default=32, )
     parser.add_argument("--nepoch", type=int, default=50,  
@@ -60,25 +62,26 @@ def parse_args():
 
     parser.add_argument('--max_len', default=50, type=int)
 
+    parser.add_argument('--base_data_dir', type=str, default='data')
     args = parser.parse_args()
     return args
 
 def train(args):
     device = args.device
 
-    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features,
-                         all_qa_interval_path='data/vid_intervals.json', feature_base_path=args.feature_base_path)
+    train_dataset = LEMMA(args.train_data_file_path.format(args.base_data_dir), args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features,
+                         all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_func)
     
-    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features,
-                        all_qa_interval_path='data/vid_intervals.json', feature_base_path=args.feature_base_path)
+    val_dataset = LEMMA(args.val_data_file_path.format(args.base_data_dir), args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features,
+                        all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path)
     val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
 
-    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features,
-                         all_qa_interval_path='data/vid_intervals.json', feature_base_path=args.feature_base_path)
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features,
+                         all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path)
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func)
     
-    with open(args.answer_set_path, 'r') as ansf:
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
         answers = ansf.readlines()
         args.output_dim = len(answers) # # output_dim == len(answers)
 
@@ -93,7 +96,7 @@ def train(args):
     criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-    with open('data/all_reasoning_types.txt', 'r') as reasonf:
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
         all_reasoning_types = reasonf.readlines()
         all_reasoning_types = [item.strip() for item in all_reasoning_types]
     train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)

@@ -1,27 +1,28 @@
 import json, os, sys
 import nltk
 
-assert os.path.exists('data/char_vocab.txt'), 'run generate_char_vocab.py first'
+mode = sys.argv[1]
+base_data_dir = sys.argv[2]
+
+assert os.path.exists(f'{base_data_dir}/char_vocab.txt'), 'run generate_char_vocab.py first'
 
 max_word_len = 17 # # train_psac.py word_len: args.char_max_len
 max_sentence_len = 50 # # train_psac.py sentence_len: args.max_len
                     # # train_visual_bert.py sentence_len args.max_len
                     # # train_linguistic_bert.py 
-# mode = 'test'
-mode = sys.argv[1]
 
 # # input: {mode}_qas_encode.json
 # # output: formatted_{mode}_qas_encode.json
 
-with open('data/char_vocab.txt', 'r') as charf:
+with open(f'{base_data_dir}/char_vocab.txt', 'r') as charf:
     char_lst = charf.readlines()
     char_lst = [char.strip() for char in char_lst]
 
-    with open('/home/leiting/scratch/lemma_simple_model/data/answer_set.txt', 'r') as ans_f:
+    with open(f'{base_data_dir}/answer_set.txt', 'r') as ans_f:
         answer_set = ans_f.readlines()
         answer_set = [ans.strip() for ans in answer_set]
 
-        with open(f'/home/leiting/scratch/lemma_simple_model/data/{mode}_qas_encode.json', 'r') as f:
+        with open(f'{base_data_dir}/{mode}_qas_encode.json', 'r') as f:
             tagged_qas = json.load(f)
             for qa in tagged_qas:
                 question_encode = []
@@ -50,6 +51,6 @@ with open('data/char_vocab.txt', 'r') as charf:
                 
                 qa['question_char_encode'] = char_tokens
         
-            with open(f'/home/leiting/scratch/lemma_simple_model/data/formatted_{mode}_qas_encode.json', 'w') as outf:
+            with open(f'{base_data_dir}/formatted_{mode}_qas_encode.json', 'w') as outf:
                 json.dump(tagged_qas, outf)
                 

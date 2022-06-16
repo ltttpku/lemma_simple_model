@@ -1,9 +1,10 @@
 import numpy as np
-import pickle
+import pickle, sys
 
 glove_pt_path = '/home/leiting/scratch/hcrn-videoqa/data/glove/glove.840.300d.pkl'
+base_data_dir = sys.argv[1]
 
-with open('data/vocab.txt',  'r') as vocabf:
+with open(f'{base_data_dir}/vocab.txt',  'r') as vocabf:
     token_itow = vocabf.readlines()
 
     glove_matrix = None
@@ -25,6 +26,6 @@ with open('data/vocab.txt',  'r') as vocabf:
            'glove': glove_matrix,
     }
 
-    output_file = 'data/glove.pt'
+    output_file = f'{base_data_dir}/glove.pt'
     with open(output_file, 'wb') as outf:
         pickle.dump(obj, outf)

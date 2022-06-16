@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument('--output', type=str, default='saved_models/%s/exp-11')
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--seed', type=int, default=1000, help='random seed')
-    parser.add_argument('--sentense_file_path',type=str, default='./data/dataset')
+    # parser.add_argument('--sentense_file_path',type=str, default='./data/dataset')
     # parser.add_argument('--glove_file_path', type=str, default='/home/leiting/scratch/hcrn-videoqa/data/glove/glove.840B.300d.txt')
     parser.add_argument('--feat_category',type=str,default='resnet')
     # parser.add_argument('--feat_path',type=str,default='/mnt/data2/lixiangpeng/dataset/tgif/features')
@@ -44,15 +44,15 @@ def parse_args():
                         help='where to store ckpts and logs')
     
     parser.add_argument("--train_data_file_path", type=str, 
-                        default='data/formatted_train_qas_encode.json', 
+                        default='{}/formatted_train_qas_encode.json', 
                         )
     parser.add_argument("--test_data_file_path", type=str, 
-                        default='data/formatted_test_qas_encode.json', 
+                        default='{}/formatted_test_qas_encode.json', 
                         )
     parser.add_argument("--val_data_file_path", type=str, 
-                        default='data/formatted_val_qas_encode.json', 
+                        default='{}/formatted_val_qas_encode.json', 
                         )
-    parser.add_argument('--answer_set_path', type=str, default='data/answer_set.txt')
+    parser.add_argument('--answer_set_path', type=str, default='{}/answer_set.txt')
 
     parser.add_argument("--nepoch", type=int, default=70,  
                         help='num of total epoches')
@@ -68,7 +68,7 @@ def parse_args():
     parser.add_argument("--i_weight", type=int, default=4000, 
                         help='frequency of weight ckpt saving')
 
-    parser.add_argument('--question_pt_path', type=str, default='data/glove.pt')
+    parser.add_argument('--question_pt_path', type=str, default='{}/glove.pt')
     parser.add_argument('--ntoken_c', type=int, default=40, help='num of chars')
     parser.add_argument('--c_emb_dim', type=int, default=64, help='dim of char_embedding')
 
@@ -82,7 +82,8 @@ def parse_args():
     parser.add_argument('--use_preprocessed_features', type=int, default=1)
     parser.add_argument('--feature_base_path', type=str, default='/scratch/generalvision/LEMMA/video_features')
 
-
+    parser.add_argument('--base_data_dir', type=str, default='data')
+    
     args = parser.parse_args()
     return args
 
@@ -100,14 +101,14 @@ def train(args):
     
     batch_size = args.batch_size
 
-    with open(args.question_pt_path, 'rb') as f:
+    with open(args.question_pt_path.format(args.base_data_dir), 'rb') as f:
         obj = pickle.load(f)
         glove_matrix = obj['glove']
 
     word_mat = torch.from_numpy(glove_matrix)
     char_mat = torch.from_numpy(np.random.normal(loc=0.0, scale=1, size=(args.ntoken_c, args.c_emb_dim)))
 
-    with open(args.answer_set_path, 'r') as ansf:
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
         answers = ansf.readlines()
         num_ans_candidates = len(answers) # # output_dim == len(answers)
 
@@ -122,16 +123,16 @@ def train(args):
                              num_hid=args.num_hid, word_mat=word_mat, char_mat=char_mat).to(device)
 
     
-    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features,
-                         all_qa_interval_path='data/vid_intervals.json', feature_base_path=args.feature_base_path )
+    train_dataset = LEMMA(args.train_data_file_path.format(args.base_data_dir), args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features,
+                         all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path )
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,drop_last=True, collate_fn=collate_func, pin_memory=True)
     
-    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features, 
-                        all_qa_interval_path='data/vid_intervals.json', feature_base_path=args.feature_base_path)
+    val_dataset = LEMMA(args.val_data_file_path.format(args.base_data_dir), args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features, 
+                        all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path)
     val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True,drop_last=True, collate_fn=collate_func)
 
-    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features,
-                        all_qa_interval_path='data/vid_intervals.json', feature_base_path=args.feature_base_path)
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features,
+                        all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path)
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True,drop_last=True, collate_fn=collate_func)
 
     criterion = nn.CrossEntropyLoss().to(device)
@@ -143,7 +144,7 @@ def train(args):
         print('reloading model from', args.reload_model_path)
         reload_step = reload(cnn, model=my_model, optimizer=optimizer, path=args.reload_model_path)
     
-    with open('data/all_reasoning_types.txt', 'r') as reasonf:
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
         all_reasoning_types = reasonf.readlines()
         all_reasoning_types = [item.strip() for item in all_reasoning_types]
     train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)

@@ -1,20 +1,22 @@
 import nltk
-import json
+import json, sys
 
+
+base_data_dir = sys.argv[1]
 modes = ['train' ,'test', 'val']
 for mode in modes:
-    input_file = f'data/{mode}_qas.json'
+    input_file = f'{base_data_dir}/{mode}_qas.json'
     # # output: {mode}_qas_encode.json, answer_set.txt, vocab.txt
-    output_file = f'data/{mode}_qas_encode.json'
+    output_file = f'{base_data_dir}/{mode}_qas_encode.json'
 
-    with open('data/lemma-qa_vocab.json', 'r') as lemma_vocab_f:
+    with open(f'{base_data_dir}/lemma-qa_vocab.json', 'r') as lemma_vocab_f:
         input_vocab = json.load(lemma_vocab_f)
         answer_set_lst = []
         # # generate answer_set
         for ans in input_vocab['answer_token_to_idx']:
             if ans not in answer_set_lst:
                 answer_set_lst.append(ans)
-        with open('data/answer_set.txt', 'w') as answerset_f:
+        with open(f'{base_data_dir}/answer_set.txt', 'w') as answerset_f:
             for ans in answer_set_lst:
                 answerset_f.write(ans)
                 answerset_f.write('\n')
@@ -25,7 +27,7 @@ for mode in modes:
         for word in input_vocab['question_token_to_idx']:
             if word not in vocab_lst:
                 vocab_lst.append(word)
-        with open('data/vocab.txt', 'w') as vocab_f:
+        with open(f'{base_data_dir}/vocab.txt', 'w') as vocab_f:
             for word in vocab_lst:
                 max_word_len = max(max_word_len, len(word))
                 vocab_f.write(word)

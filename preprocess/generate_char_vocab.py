@@ -1,6 +1,7 @@
-import json, nltk
+import json, nltk, sys
 
-with open('data/tagged_qas.json', 'r') as f:
+base_data_dir = sys.argv[1]
+with open(f'{base_data_dir}/tagged_qas.json', 'r') as f:
     tagged_qas = json.load(f)
     char_lst = ['|', ]
     for qa in tagged_qas:
@@ -13,7 +14,7 @@ with open('data/tagged_qas.json', 'r') as f:
                 if c in char_lst:
                     continue
                 char_lst.append(c)
-    with open('data/char_vocab.txt', 'w') as outf:
+    with open(f'{base_data_dir}/char_vocab.txt', 'w') as outf:
         for ch in char_lst:
             outf.write(ch)
             outf.write('\n')

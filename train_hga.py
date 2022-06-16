@@ -16,6 +16,8 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 import argparse, time, pickle
 
+from yaml import parse
+
 from model.HGA.warmup_scheduler import GradualWarmupScheduler
 seed = 999
 
@@ -43,15 +45,15 @@ def parse_args():
                         help='where to store ckpts and logs')
     
     parser.add_argument("--train_data_file_path", type=str, 
-                        default='data/formatted_train_qas_encode.json', 
+                        default='{}/formatted_train_qas_encode.json', 
                         )
     parser.add_argument("--test_data_file_path", type=str, 
-                        default='data/formatted_test_qas_encode.json', 
+                        default='{}/formatted_test_qas_encode.json', 
                         )
     parser.add_argument("--val_data_file_path", type=str, 
-                        default='data/formatted_val_qas_encode.json', 
+                        default='{}/formatted_val_qas_encode.json', 
                         )
-    parser.add_argument('--answer_set_path', type=str, default='data/answer_set.txt')
+    parser.add_argument('--answer_set_path', type=str, default='{}/answer_set.txt')
 
     parser.add_argument("--nepoch", type=int, default=150,  
                         help='num of total epoches')
@@ -72,7 +74,7 @@ def parse_args():
 
     parser.add_argument('--test_only', default=False, type=bool)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
-    parser.add_argument('--question_pt_path', type=str, default='data/glove.pt')
+    parser.add_argument('--question_pt_path', type=str, default='{}/glove.pt')
    
     # parser.add_argument('--max_sequence_length', default=20, type=int)
     # # from HGA/main.py parser
@@ -125,7 +127,7 @@ def parse_args():
     parser.add_argument('--q_max_length', type=int, default=35, help='limit of question pos_embedding')
     parser.add_argument('--v_max_length', type=int, default=80, help='limit of video pos_embedding')
 
-
+    parser.add_argument('--base_data_dir', type=str, default='data')
     args = parser.parse_args()
     return args
 
@@ -135,20 +137,20 @@ def test(args):
 def train(args):
     device = args.device
 
-    train_dataset = LEMMA(args.train_data_file_path, args.img_size, 'train', args.num_frames_per_video, args.video_feature_path)
+    train_dataset = LEMMA(args.train_data_file_path.format(args.base_data_dir), args.img_size, 'train', args.num_frames_per_video, args.video_feature_path)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, collate_fn=collate_func)
     
-    val_dataset = LEMMA(args.val_data_file_path, args.img_size, 'val', args.num_frames_per_video, args.video_feature_path)
+    val_dataset = LEMMA(args.val_data_file_path.format(args.base_data_dir), args.img_size, 'val', args.num_frames_per_video, args.video_feature_path)
     val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, collate_fn=collate_func)
 
-    test_dataset = LEMMA(args.test_data_file_path, args.img_size, 'test', args.num_frames_per_video, args.video_feature_path)
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), args.img_size, 'test', args.num_frames_per_video, args.video_feature_path)
     test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, collate_fn=collate_func)
     
-    with open(args.answer_set_path, 'r') as ansf:
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
         answers = ansf.readlines()
         answer_vocab_size = len(answers) # # output_dim == len(answers)
 
-    with open(args.question_pt_path, 'rb') as f:
+    with open(args.question_pt_path.format(args.base_data_dir), 'rb') as f:
         obj = pickle.load(f)
         glove_matrix = obj['glove']
 
@@ -242,7 +244,7 @@ def train(args):
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer, milestones=args.lr_list, gamma=0.1)
 
-    with open('data/all_reasoning_types.txt', 'r') as reasonf:
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
         all_reasoning_types = reasonf.readlines()
         all_reasoning_types = [item.strip() for item in all_reasoning_types]
     train_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)

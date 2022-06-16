@@ -29,7 +29,7 @@ def preprocess_vocab(args):
         answer_token_to_idx[token.lower()] = len(answer_token_to_idx)
     print('Get answer_token_to_idx, num: %d' % len(answer_token_to_idx))
 
-    question_token_to_idx = {'<NULL>': 0, '<UNK>': 1}
+    question_token_to_idx = {'<NULL>': 0, '<UNK>': 1, 'has': 2, 'that': 3}
     for i, instance in enumerate(instances):
         question = instance['question'].lower()[:-1]
         for token in nltk.word_tokenize(question):
@@ -45,7 +45,7 @@ def preprocess_vocab(args):
     }
 
     print('Write into %s' % args.vocab_json.format(args.dataset, args.dataset))
-    with open(args.vocab_json.format(args.dataset, args.dataset), 'w') as f:
+    with open(args.vocab_json.format(args.base_data_dir, args.dataset), 'w') as f:
         json.dump(vocab, f, indent=4)
 
 if __name__ == '__main__':
@@ -55,7 +55,8 @@ if __name__ == '__main__':
     # parser.add_argument('--glove_pt',
     #                     help='glove pickle file, should be a map whose key are words and value are word vectors represented by numpy arrays. Only needed in train mode')
     # parser.add_argument('--output_pt', type=str, default='data/{}/{}_{}_questions.pt')
-    parser.add_argument('--vocab_json', type=str, default='data/{}_vocab.json')
+    parser.add_argument('--base_data_dir', type=str, default='data')
+    parser.add_argument('--vocab_json', type=str, default='{}/{}_vocab.json')
     parser.add_argument('--mode', choices=['train', 'val', 'test'])
     # parser.add_argument('--question_type', choices=['frameqa', 'action', 'transition', 'count', 'none'], default='none')
     parser.add_argument('--seed', type=int, default=666)
@@ -63,6 +64,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     np.random.seed(args.seed)
 
-    args.annotation_file = 'data/train_qas.json'
+    args.annotation_file = f'{args.base_data_dir}/train_qas.json'
 
     preprocess_vocab(args=args)
