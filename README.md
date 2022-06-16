@@ -7,6 +7,10 @@ conda activate lemma
 pip install torch torchvision  --extra-index-url https://download.pytorch.org/whl/cu113 
 pip install regex tensorboard block tqdm h5py pyyaml scipy block.bootstrap.pytorch transformers
 ```
+or
+```bash
+pip install -r environment.txt
+```
 
 ## PREPROCESS
 ```bash
