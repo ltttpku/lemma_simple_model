@@ -38,6 +38,7 @@ for mode in modes:
         max_sentence_len = 1
         with open(input_file, 'r') as f:
             qas = json.load(f)
+            print('total qas:', mode, len(qas))
             for qa in qas:
                 
                 # question_word_lst = qa['question'][:-1].split(' ') # #去掉标点符号
@@ -62,6 +63,7 @@ for mode in modes:
                     if qa['answer'] in answer_set_lst:
                         qa['answer_encode'] = str(answer_set_lst.index(qa['answer'].lower()))
                     else:
+                        print(mode, qa['answer'])
                         qa['answer_encode'] = str(answer_set_lst.index("<UNK1>"))
             with open(output_file, 'w') as outf:
                 json.dump(qas, outf)
