@@ -93,11 +93,11 @@ For bert-based model, you need to set BertTokenizer_CKPT and BertModel_CKPT for 
 
 
 ```bash
-$ python $TRAIN_MODEL_PY --base_data_dir $BASE_DATA_DIR  --reload_model_path $RELOAD_MODEL_PATH
+$ python $TRAIN_MODEL_PY --base_data_dir $BASE_DATA_DIR --reload_model_path $RELOAD_MODEL_PATH
 ```
 for models ``$TRAIN_MODEL_PY`` in ``train_hcrn.py``, ``train_hme.py``, ``train_hga.py`` and 
 
 ```bash
-$ python $TRAIN_MODEL_PY --feature_base_path $FEATURE_BASE_PATH --base_data_dir $BASE_DATA_DIR  --reload_model_path $RELOAD_MODEL_PATH
+$ python $TRAIN_MODEL_PY --feature_base_path $FEATURE_BASE_PATH --base_data_dir $BASE_DATA_DIR --reload_model_path $RELOAD_MODEL_PATH
 ```
 for models ``$TRAIN_MODEL_PY`` in ``train_psac.py``, ``train_pure_lstm.py``, ``train_linguistic_bert.py``, ``train_visual_bert.py``.
