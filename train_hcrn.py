@@ -58,7 +58,7 @@ def parse_args():
 
     parser.add_argument('--output_dim', type=int, default=1)
 
-    parser.add_argument('--test_only', default=False, type=bool)
+    parser.add_argument('--test_only', default=0, type=int)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
 
     parser.add_argument('--question_pt_path', type=str, default='{}/glove.pt')
@@ -232,7 +232,66 @@ def train(args):
 
 
 def test(args):
-    pass
+    device = args.device
+
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), 'test', 
+                    app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
+                    motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
+    test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
+    
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
+        answers = ansf.readlines()
+        args.output_dim = len(answers) # # output_dim == len(answers)
+
+    args.vision_dim = 2048
+    args.module_dim = 512
+    args.word_dim = 300
+    args.k_max_frame_level = 16
+    args.k_max_clip_level = 8
+    args.spl_resolution = 1
+    vocab_dct = json.load(open('{}/lemma-qa_vocab.json'.format(args.base_data_dir), 'r'))
+    args.question_type = 'none'
+
+    model_kwargs = {
+            'vision_dim': args.vision_dim, ## 2048
+            'module_dim': args.module_dim, ## 512
+            'word_dim': args.word_dim, ## 300
+            'k_max_frame_level': args.k_max_frame_level, ## 16
+            'k_max_clip_level': args.k_max_clip_level, ## 8
+            'spl_resolution': args.spl_resolution, ## 1
+            'vocab': vocab_dct, # # shape should be the same as glove_matrix
+            'question_type': args.question_type ## 'none'
+    }
+
+    # glove_matrix = torch.rand(201, 300).to(device)
+    with open(args.question_pt_path.format(args.base_data_dir), 'rb') as f:
+        obj = pickle.load(f)
+        glove_matrix = obj['glove']
+    glove_matrix = torch.FloatTensor(glove_matrix).to(device)
+
+    model = HCRN.HCRNNetwork(**model_kwargs).to(device)
+    with torch.no_grad():
+        model.linguistic_input_unit.encoder_embed.weight.set_(glove_matrix)
+    
+    criterion = nn.CrossEntropyLoss().to(device)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(model=model, optimizer=optimizer, path=args.reload_model_path)
+    
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
+        all_reasoning_types = reasonf.readlines()
+        all_reasoning_types = [item.strip() for item in all_reasoning_types]
+
+    test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+    test_acc_calculator.reset()
+    test_loss, test_acc = validate(model=model, val_loader=test_dataloader, epoch=0, args=args, acc_calculator=test_acc_calculator)
+    acc_dct = test_acc_calculator.get_acc()
+    for key, value in acc_dct.items():
+        print(f"{key} acc:{value}")
+    print('TOTAL TEST ACC:', test_acc.item())
 
 
 def validate( model, val_loader, epoch, args, acc_calculator):

@@ -63,7 +63,7 @@ for mode in modes:
                     if qa['answer'] in answer_set_lst:
                         qa['answer_encode'] = str(answer_set_lst.index(qa['answer'].lower()))
                     else:
-                        print(mode, qa['answer'])
+                        # print(mode, qa['answer'])
                         qa['answer_encode'] = str(answer_set_lst.index("<UNK1>"))
             with open(output_file, 'w') as outf:
                 json.dump(qas, outf)

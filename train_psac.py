@@ -1,4 +1,5 @@
 import argparse
+from pyexpat import model
 import torch
 import torch.nn as nn
 import torchvision
@@ -77,7 +78,7 @@ def parse_args():
     parser.add_argument('--cnn_modelname', type=str, default='resnet101')
     parser.add_argument('--cnn_pretrained', type=bool, default=True)
 
-    parser.add_argument('--test_only', default=False, type=bool)
+    parser.add_argument('--test_only', default=0, type=int)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
     parser.add_argument('--use_preprocessed_features', type=int, default=1)
     parser.add_argument('--feature_base_path', type=str, default='/scratch/generalvision/LEMMA/video_features')
@@ -297,7 +298,62 @@ def validate(cnn, psac, val_loader, epoch, args, acc_calculator):
     return all_loss / len(val_loader), all_acc / len(val_loader)
 
 def test(args):
-    pass
+    torch.backends.cudnn.enabled = False
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+    torch.backends.cudnn.benchmark = True
+    print('parameters:', args)
+    print('task:',args.task,'model:', args.model)
+    device_id = 0
+    device = torch.device(f"cuda:{device_id}" if torch.cuda.is_available() else "cpu")
+    args.device = device
+    
+    batch_size = args.batch_size
+
+    with open(args.question_pt_path.format(args.base_data_dir), 'rb') as f:
+        obj = pickle.load(f)
+        glove_matrix = obj['glove']
+
+    word_mat = torch.from_numpy(glove_matrix)
+    char_mat = torch.from_numpy(np.random.normal(loc=0.0, scale=1, size=(args.ntoken_c, args.c_emb_dim)))
+
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
+        answers = ansf.readlines()
+        num_ans_candidates = len(answers) # # output_dim == len(answers)
+
+
+    # word_mat = torch.rand(13, 300) # # defined 300
+    # char_mat = torch.rand(40, 64) # # defined 64
+    # num_ans_candidates = 2
+    cnn = build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
+    cnn.eval() # TODO ?
+
+    my_model = FrameQA_model.build_my_model(args.task, args.vid_enc_layers, num_ans_candidates=num_ans_candidates,
+                             num_hid=args.num_hid, word_mat=word_mat, char_mat=char_mat).to(device)
+
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features,
+                        all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True,drop_last=True, collate_fn=collate_func)
+
+    criterion = nn.CrossEntropyLoss().to(device)
+    # optimizer = torch.optim.Adam(my_model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adamax(my_model.parameters())  
+
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(cnn, model=my_model, optimizer=optimizer, path=args.reload_model_path)
+    
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
+        all_reasoning_types = reasonf.readlines()
+        all_reasoning_types = [item.strip() for item in all_reasoning_types]
+    test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+
+    testloss, testacc = validate(cnn=cnn, psac=my_model, val_loader=test_dataloader, epoch=0, args=args, acc_calculator=test_acc_calculator)
+    acc_dct = test_acc_calculator.get_acc()
+    for key, value in acc_dct.items():
+        print(f"{key} acc:{value}")
+    print('test acc:', testacc)
     
 def reload(cnn, model, optimizer, path):
     checkpoint = torch.load(path)

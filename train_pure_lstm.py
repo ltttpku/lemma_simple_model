@@ -1,5 +1,6 @@
 from pyexpat import model
 from statistics import mode
+from unittest import TestLoader
 import torch
 import numpy as np
 import torch.nn as nn
@@ -54,7 +55,7 @@ def parse_args():
     parser.add_argument('--use_preprocessed_features', type=int, default=1)
     parser.add_argument('--feature_base_path', type=str, default='/scratch/generalvision/LEMMA/video_features')
 
-    parser.add_argument('--test_only', default=False, type=bool)
+    parser.add_argument('--test_only', default=0, type=int)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
 
     parser.add_argument('--base_data_dir', type=str, default='data')
@@ -196,7 +197,42 @@ def train(args):
 
 def test(args):
     device = args.device
-     
+
+    
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
+        answers = ansf.readlines()
+        args.output_dim = len(answers) # # output_dim == len(answers)
+
+    # cnn = cnn_lstm.build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
+    # cnn.eval() # TODO ?
+
+    lstm = pure_lstm.pure_lstm(
+        input_size=300, hidden_size=256, num_layers=6, 
+        num_classes=args.output_dim,
+        question_pt_path='{}/glove.pt'.format(args.base_data_dir)).to(args.device) # # vocab_size = glove_matrix.shape[0]
+
+    criterion = nn.CrossEntropyLoss().to(device)
+    optimizer = optim.Adam(lstm.parameters(), lr=args.lr)
+
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
+        all_reasoning_types = reasonf.readlines()
+        all_reasoning_types = [item.strip() for item in all_reasoning_types]
+    test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(model=lstm, optimizer=optimizer, path=args.reload_model_path)
+
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features,
+                        all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True,drop_last=True, collate_fn=collate_func)
+
+    test_loss, test_acc = validate(lstm=lstm, val_loader=test_dataloader, epoch=0, args=args, acc_calculator=test_acc_calculator)
+    acc_dct = test_acc_calculator.get_acc()
+    for key, value in acc_dct.items():
+        print(f"{key} acc:{value}")
+    print('test acc:', test_acc)
 
 
 def validate(lstm, val_loader, epoch, args, acc_calculator):
@@ -238,9 +274,9 @@ def validate(lstm, val_loader, epoch, args, acc_calculator):
     return all_loss, all_acc
 
 
-def reload(lstm, optimizer, path):
+def reload(model, optimizer, path):
     checkpoint = torch.load(path)
-    lstm.load_state_dict(checkpoint['pure_lstm_state_dict'])
+    model.load_state_dict(checkpoint['pure_lstm_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     global_step = checkpoint['global_step']
     return global_step

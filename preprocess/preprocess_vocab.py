@@ -29,7 +29,7 @@ def preprocess_vocab(args):
         answer_token_to_idx[token.lower()] = len(answer_token_to_idx)
     print('Get answer_token_to_idx, num: %d' % len(answer_token_to_idx))
 
-    question_token_to_idx = {'<NULL>': 0, '<UNK>': 1, 'has': 2, 'that': 3}
+    question_token_to_idx = {'<NULL>': 0, '<UNK>': 1,}
     for i, instance in enumerate(instances):
         question = instance['question'].lower()[:-1]
         for token in nltk.word_tokenize(question):
@@ -43,7 +43,10 @@ def preprocess_vocab(args):
         'answer_token_to_idx': answer_token_to_idx,
         'question_answer_token_to_idx': {'<NULL>': 0, '<UNK>': 1}
     }
-
+    if 'has' not in vocab['question_token_to_idx'] and 'that' not in vocab['question_token_to_idx']:
+        vocab['question_token_to_idx']['has'] = len(vocab['question_token_to_idx'])
+        vocab['question_token_to_idx']['that'] = len(vocab['question_token_to_idx'])
+        
     print('Write into %s' % args.vocab_json.format(args.dataset, args.dataset))
     with open(args.vocab_json.format(args.base_data_dir, args.dataset), 'w') as f:
         json.dump(vocab, f, indent=4)

@@ -89,15 +89,19 @@ For bert-based model, you need to set BertTokenizer_CKPT and BertModel_CKPT for 
 
 + For visual_bert, set BertTokenizer_CKPT="bert-base-uncased", VisualBertModel_CKPT="uclanlp/visualbert-vqa-coco-pre".
 
-## Reload ckpts
+## Reload ckpts & test_only
 
 
 ```bash
-$ python $TRAIN_MODEL_PY --base_data_dir $BASE_DATA_DIR --reload_model_path $RELOAD_MODEL_PATH
+$ python $TRAIN_MODEL_PY --base_data_dir $BASE_DATA_DIR --reload_model_path $RELOAD_MODEL_PATH --test_only 1
 ```
 for models ``$TRAIN_MODEL_PY`` in ``train_hcrn.py``, ``train_hme.py``, ``train_hga.py`` and 
 
 ```bash
-$ python $TRAIN_MODEL_PY --feature_base_path $FEATURE_BASE_PATH --base_data_dir $BASE_DATA_DIR --reload_model_path $RELOAD_MODEL_PATH
+$ python $TRAIN_MODEL_PY --feature_base_path $FEATURE_BASE_PATH --base_data_dir $BASE_DATA_DIR --reload_model_path $RELOAD_MODEL_PATH --test_only 1
 ```
 for models ``$TRAIN_MODEL_PY`` in ``train_psac.py``, ``train_pure_lstm.py``, ``train_linguistic_bert.py``, ``train_visual_bert.py``.
+
+
+## Acknowledgement
+This code heavily used resources from [VisualBERT](https://huggingface.co/docs/transformers/v4.19.2/en/model_doc/visual_bert#visualbert), [HCRN](https://github.com/thaolmk54/hcrn-videoqa), [HGA](https://github.com/Jumpin2/HGA), [HME](https://github.com/fanchenyou/HME-VideoQA), [PSAC](https://github.com/lixiangpengcs/PSAC). We thank the authors for open-sourcing their awesome projects.

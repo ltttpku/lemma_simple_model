@@ -72,7 +72,7 @@ def parse_args():
 
     parser.add_argument('--video_feature_path', type=str, default='data/video_feature_20.h5')
 
-    parser.add_argument('--test_only', default=False, type=bool)
+    parser.add_argument('--test_only', default=0, type=int)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
     parser.add_argument('--question_pt_path', type=str, default='{}/glove.pt')
    
@@ -132,7 +132,121 @@ def parse_args():
     return args
 
 def test(args):
-    pass
+    device = args.device
+
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), args.img_size, 'test', args.num_frames_per_video, args.video_feature_path)
+    test_dataloader = DataLoader(test_dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, collate_fn=collate_func)
+    
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
+        answers = ansf.readlines()
+        answer_vocab_size = len(answers) # # output_dim == len(answers)
+
+    with open(args.question_pt_path.format(args.base_data_dir), 'rb') as f:
+        obj = pickle.load(f)
+        glove_matrix = obj['glove']
+
+    if args.two_loss > 0:
+        args.two_loss = True
+    else:
+        args.two_loss = False
+
+    if args.birnn > 0:
+        args.birnn = True
+    else:
+        args.birnn = False
+
+    assert args.ablation in ['none', 'gcn', 'global', 'local', 'only_local']
+    assert args.fusion_type in [
+        'none', 'coattn', 'single_visual', 'single_semantic', 'coconcat',
+        'cosiamese'
+    ]
+    # # mymodel
+    args.word_matrix = glove_matrix
+    args.voc_len = args.word_matrix.shape[0]
+    args.resnet_input_size = 4096
+    args.c3d_input_size = 4096
+    args.answer_vocab_size = answer_vocab_size
+
+    model = LSTMCrossCycleGCNDropout(
+        args.voc_len,
+        args.rnn_layers,
+        args.birnn,
+        'gru',
+        args.word_matrix,
+        args.resnet_input_size,
+        args.c3d_input_size,
+        args.rnn_layers,
+        args.birnn,
+        'gru',
+        args.hidden_size,
+        dropout_p=args.dropout,
+        gcn_layers=args.gcn_layers,
+        num_heads=8,
+        answer_vocab_size=args.answer_vocab_size,
+        q_max_len=args.q_max_length,
+        v_max_len=args.v_max_length,
+        tf_layers=args.tf_layers,
+        two_loss=args.two_loss,
+        fusion_type=args.fusion_type,
+        ablation=args.ablation)
+    model.to(device)
+
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        model = torch.load(args.reload_model_path, )
+        # reload_step = reload(model=model, optimizer=optimizer, path=args.reload_model_path)
+    
+
+    criterion = nn.CrossEntropyLoss(size_average=True).to(device)
+    if args.change_lr == 'none':
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    elif args.change_lr == 'acc':
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=args.lr / 5., weight_decay=args.weight_decay)
+        # val plateau scheduler
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='max', factor=0.1, patience=3, verbose=True)
+        # target lr = args.lr * multiplier
+        scheduler_warmup = GradualWarmupScheduler(
+            optimizer, multiplier=5, total_epoch=5, after_scheduler=scheduler)
+    elif args.change_lr == 'loss':
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=args.lr / 5., weight_decay=args.weight_decay)
+        # val plateau scheduler
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.1, patience=3, verbose=True)
+        # target lr = args.lr * multiplier
+        scheduler_warmup = GradualWarmupScheduler(
+            optimizer, multiplier=5, total_epoch=5, after_scheduler=scheduler)
+    elif args.change_lr == 'cos':
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=args.lr / 5., weight_decay=args.weight_decay)
+        # consine annealing
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, args.max_epoch)
+        # target lr = args.lr * multiplier
+        scheduler_warmup = GradualWarmupScheduler(
+            optimizer, multiplier=5, total_epoch=5, after_scheduler=scheduler)
+    elif args.change_lr == 'step':
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=args.lr_list, gamma=0.1)
+
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
+        all_reasoning_types = reasonf.readlines()
+        all_reasoning_types = [item.strip() for item in all_reasoning_types]
+
+    test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+
+    testloss, testacc = validate(model=model, val_loader=test_dataloader, epoch=0, args=args, criterion=criterion, acc_calculator=test_acc_calculator)
+    acc_dct = test_acc_calculator.get_acc()
+    for key, value in acc_dct.items():
+        print(f"{key} acc:{value}")
+    print('test acc:', testacc)
+
 
 def train(args):
     device = args.device

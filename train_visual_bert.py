@@ -1,4 +1,5 @@
 
+from unittest import TestCase
 import torch
 import numpy as np
 import torch.nn as nn
@@ -56,7 +57,7 @@ def parse_args():
     parser.add_argument('--use_preprocessed_features', type=int, default=1)
     parser.add_argument('--feature_base_path', type=str, default='/scratch/generalvision/LEMMA/video_features')
 
-    parser.add_argument('--test_only', default=False, type=bool)
+    parser.add_argument('--test_only', default=0, type=int)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
 
     parser.add_argument('--max_len', default=50, type=int)
@@ -198,7 +199,53 @@ def train(args):
         log_file.flush()
 
 def test(args):
-    pass
+    device = args.device
+
+    train_dataset = LEMMA(args.train_data_file_path.format(args.base_data_dir), args.img_size, 'train', args.num_frames_per_video, args.use_preprocessed_features,
+                         all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path )
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True,drop_last=True, collate_fn=collate_func, pin_memory=True)
+    
+    val_dataset = LEMMA(args.val_data_file_path.format(args.base_data_dir), args.img_size, 'val', args.num_frames_per_video, args.use_preprocessed_features, 
+                        all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path)
+    val_dataloader = DataLoader(val_dataset, batch_size=64, shuffle=True,drop_last=True, collate_fn=collate_func)
+
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), args.img_size, 'test', args.num_frames_per_video, args.use_preprocessed_features,
+                        all_qa_interval_path='{}/vid_intervals.json'.format(args.base_data_dir), feature_base_path=args.feature_base_path)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True,drop_last=True, collate_fn=collate_func)
+
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
+        answers = ansf.readlines()
+        args.output_dim = len(answers) # # output_dim == len(answers)
+
+    cnn = visual_bert.build_resnet(args.cnn_modelname, pretrained=args.cnn_pretrained).to(device=args.device)
+    cnn.eval() # TODO ?
+
+    visualbert = visual_bert.VisualBERT(
+        BertTokenizer_CKPT="/home/leiting/scratch/transformers_pretrained_models/visual_bert",
+        VisualBertModel_CKPT="/home/leiting/scratch/transformers_pretrained_models/visual_bert",
+        output_dim=args.output_dim,
+        max_len=args.max_len).to(args.device) # # 
+
+    criterion = nn.CrossEntropyLoss().to(device)
+    optimizer = optim.Adam(visualbert.parameters(), lr=args.lr)
+
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
+        all_reasoning_types = reasonf.readlines()
+        all_reasoning_types = [item.strip() for item in all_reasoning_types]
+
+    test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(cnn, model=visualbert, optimizer=optimizer, path=args.reload_model_path)
+    
+    test_loss, test_acc = validate(cnn=cnn, visualbert=visualbert, val_loader=test_dataloader, epoch=0, args=args, acc_calculator=test_acc_calculator)
+    acc_dct = test_acc_calculator.get_acc()
+    for key, value in acc_dct.items():
+        print(f"{key} acc:{value}")
+    print('TEST ACC:', test_acc)
+    
     
 
 def validate(cnn, visualbert, val_loader, epoch, args, acc_calculator):

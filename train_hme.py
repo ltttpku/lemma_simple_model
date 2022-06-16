@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument('--output_dim', type=int, default=1)
     parser.add_argument('--video_feature_path', type=str, default='data/video_feature_20.h5')
 
-    parser.add_argument('--test_only', default=False, type=bool)
+    parser.add_argument('--test_only', default=0, type=int)
     parser.add_argument('--reload_model_path', default='', type=str, help='model_path')
     parser.add_argument('--question_pt_path', type=str, default='{}/glove.pt')
    
@@ -204,7 +204,52 @@ def train(args):
 
 
 def test(args):
-    pass
+    device = args.device
+
+    test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), args.img_size, 'test', args.num_frames_per_video, args.video_feature_path)
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True, collate_fn=collate_func, drop_last=True)
+    
+    with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
+        answers = ansf.readlines()
+        answer_vocab_size = len(answers) # # output_dim == len(answers)
+
+    with open(args.question_pt_path.format(args.base_data_dir), 'rb') as f:
+        obj = pickle.load(f)
+        glove_matrix = obj['glove']
+
+    feat_channel = 2048
+    feat_dim = 1
+    text_embed_size = 300
+    hidden_size = 512
+
+    word_matrix = glove_matrix
+    voc_len = word_matrix.shape[0]
+    num_layers= 2
+    max_sequence_length = args.num_frames_per_video # #  args.video_feature_num = 20, fixed
+
+    my_rnn = AttentionTwoStream(feat_channel, feat_dim, text_embed_size, hidden_size,
+                         voc_len, num_layers, word_matrix, answer_vocab_size = answer_vocab_size,
+                         max_len=max_sequence_length).to(device)
+
+    criterion = nn.CrossEntropyLoss(size_average=True).to(device)
+    optimizer = optim.Adam(my_rnn.parameters(), lr=args.lr)
+
+    reload_step = 0
+    if args.reload_model_path != '':
+        print('reloading model from', args.reload_model_path)
+        reload_step = reload(model=my_rnn, optimizer=optimizer, path=args.reload_model_path)
+    
+    with open('{}/all_reasoning_types.txt'.format(args.base_data_dir), 'r') as reasonf:
+        all_reasoning_types = reasonf.readlines()
+        all_reasoning_types = [item.strip() for item in all_reasoning_types]
+
+    test_acc_calculator = ReasongingTypeAccCalculator(reasoning_types=all_reasoning_types)
+    testloss, testacc = validate(my_rnn=my_rnn, val_loader=test_dataloader, epoch=0, args=args, acc_calculator=test_acc_calculator)
+    acc_dct = test_acc_calculator.get_acc()
+    for key, value in acc_dct.items():
+        print(f"{key} acc:{value}")
+    print('test acc', testacc)
+
 
 def validate(my_rnn, val_loader, epoch, args, acc_calculator):
     my_rnn.eval()
@@ -238,8 +283,7 @@ def validate(my_rnn, val_loader, epoch, args, acc_calculator):
             acc = my_rnn.accuracy(predictions, targets)
             all_loss += loss
             all_acc += acc
-            # print('validate finish in', (time.time() - starttime) * (len(val_loader) - i), 's')
-            # starttime = time.time()
+
             acc_calculator.update(reasoning_type_lst, predictions, targets)
 
     all_loss /= len(val_loader)
