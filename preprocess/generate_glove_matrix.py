@@ -1,7 +1,8 @@
 import numpy as np
 import pickle, sys
 
-glove_pt_path = '/home/leiting/scratch/hcrn-videoqa/data/glove/glove.840.300d.pkl'
+# glove_pt_path = '/home/leiting/scratch/hcrn-videoqa/data/glove/glove.840.300d.pkl'
+glove_pt_path = "/home/baoxiong/Projects/baselines/qa_baselines/CODE/data/glove/glove.840.300d.pkl"
 base_data_dir = sys.argv[1]
 
 with open(f'{base_data_dir}/vocab.txt',  'r') as vocabf:

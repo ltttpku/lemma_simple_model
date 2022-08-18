@@ -76,7 +76,7 @@ Use the following command and substitute ``$TRAIN_MODEL_PY`` to the model you wa
 ```bash
 $ python $TRAIN_MODEL_PY --base_data_dir $BASE_DATA_DIR
 ```
-for models ``$TRAIN_MODEL_PY`` in ``train_hcrn.py``, ``train_hme.py``, ``train_hga.py`` and 
+for models ``$TRAIN_MODEL_PY`` in ``train_hcrn.py``, ``train_hme.py``, ``train_hga.py`` (you might also want to change the ``app_feat_path``, ``motion_feat_path`` and ``video_feat_path`` in these files for adjusting the feature path) and 
 
 ```bash
 $ python $TRAIN_MODEL_PY --feature_base_path $FEATURE_BASE_PATH --base_data_dir $BASE_DATA_DIR

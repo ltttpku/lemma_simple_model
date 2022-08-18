@@ -39,6 +39,10 @@ def parse_args():
     parser.add_argument("--val_data_file_path", type=str, 
                         default='{}/formatted_val_qas_encode.json', 
                         )
+    parser.add_argument("--app_feat_path", type=str,
+                        default="data/hcrn_data/lemma-qa_appearance_feat.h5")
+    parser.add_argument("--motion_feat_path", type=str,
+                        default="data/hcrn_data/lemma_qa_motion_feat.h5")
     parser.add_argument('--answer_set_path', type=str, default='{}/answer_set.txt')
 
     parser.add_argument("--batch_size", type=int, default=32, )
@@ -70,20 +74,19 @@ def parse_args():
 
 def train(args):
     device = args.device
-
     train_dataset = LEMMA(args.train_data_file_path.format(args.base_data_dir), 'train', 
-                    app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
-                    motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
+                    app_feature_h5=args.app_feat_path,
+                    motion_feature_h5=args.motion_feat_path)
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_func)
     
     val_dataset = LEMMA(args.val_data_file_path.format(args.base_data_dir), 'val', 
-                    app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
-                    motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
+                    app_feature_h5=args.app_feat_path,
+                    motion_feature_h5=args.motion_feat_path)
     val_dataloader = DataLoader(val_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
 
     test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), 'test', 
-                    app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
-                    motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
+                    app_feature_h5=args.app_feat_path,
+                    motion_feature_h5=args.motion_feat_path)
     test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
     
     with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
@@ -235,8 +238,8 @@ def test(args):
     device = args.device
 
     test_dataset = LEMMA(args.test_data_file_path.format(args.base_data_dir), 'test', 
-                    app_feature_h5='data/hcrn_data/lemma-qa_appearance_feat.h5',
-                    motion_feature_h5='data/hcrn_data/lemma-qa_motion_feat.h5')
+                    app_feature_h5=args.app_feat_path,
+                    motion_feature_h5=args.motion_feat_path)
     test_dataloader = DataLoader(test_dataset, batch_size=128, shuffle=True, collate_fn=collate_func)
     
     with open(args.answer_set_path.format(args.base_data_dir), 'r') as ansf:
